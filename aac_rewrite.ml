@@ -90,7 +90,7 @@ let infer_lifting (rlt: Coq.Relation.t) (k : lift:aac_lift -> Proof_type.tactic)
     ))
      
 (** Builds a rewinfo, once and for all *)
-let dispatch in_left (left,right,rlt) hypinfo (k: rewinfo -> Proof_type.tactic ) : Proof_type.tactic=
+let dispatch in_left (left,right,rlt) hypinfo (k: rewinfo -> 'a ) : 'a =
   let l2r = hypinfo.Coq.Rewrite.l2r in
   infer_lifting rlt
     (fun ~lift ->

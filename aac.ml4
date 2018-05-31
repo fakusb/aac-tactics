@@ -16,6 +16,7 @@ open Pcoq.Prim
 open Pcoq.Constr
 open Stdarg
 open Aac_rewrite
+open Aac_apply
 open Extraargs
 open Genarg
 
@@ -97,4 +98,9 @@ END
 TACTIC EXTEND _aacu_instances_
 | [ "aacu_instances" orient(l2r) constr(c) aac_args(args) constro(extra)] ->
   [ Proofview.V82.tactic (fun gl -> aac_rewrite ?extra ~args ~l2r ~strict:false ~show:true c gl) ]
+END
+
+TACTIC EXTEND _aac_apply_
+| [ "aac_apply" constr(c)] ->
+  [ aac_apply c ]
 END

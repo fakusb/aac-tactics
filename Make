@@ -8,17 +8,20 @@ matcher.mli
 theory.mli
 print.mli
 aac_rewrite.mli
+aac_apply.mli
 coq.ml
 helper.ml
-search_monad.ml
+search_monad.ml 
 matcher.ml
 theory.ml
 print.ml
 aac_rewrite.ml
+aac_apply.ml
 aac.ml4
 aac_plugin.mlpack
 
 AAC.v
 Instances.v
+test_aac_apply.v
 Tutorial.v
 Caveats.v
