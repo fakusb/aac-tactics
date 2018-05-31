@@ -32,6 +32,7 @@ Require Import FMapPositive FMapFacts.
 Require Import RelationClasses Equality.
 Require Import Utils.
 Require Export Morphisms.
+Require Export Interface.
 
 Set Implicit Arguments.
 Set Asymmetric Patterns.
@@ -51,17 +52,6 @@ Section sigma.
   Definition sigma_empty := @PositiveMap.empty.
 End sigma.
 
-
-(** * Classes for properties of operators *)
-
-Class Associative (X:Type) (R:relation X) (dot: X -> X -> X) :=
-  law_assoc : forall x y z, R (dot x (dot y z)) (dot (dot x y) z).
-Class Commutative (X:Type) (R: relation X) (plus: X -> X -> X) :=
-  law_comm: forall x y, R (plus x y) (plus y x).
-Class Unit (X:Type) (R:relation X) (op : X -> X -> X) (unit:X) := {
-  law_neutral_left: forall x, R (op unit x) x;
-  law_neutral_right: forall x, R (op x unit) x
-}.
 
 
 (** Class used to find the equivalence relation on which operations
@@ -89,42 +79,6 @@ Instance aac_lift_proper {X} {R : relation X} {E} {HE: Equivalence E}
 
 
 Module Internal.
-(** * Utilities for the evaluation function *)
-
-Section copy.
-
-  Context {X} {R} {HR: @Equivalence X R} {plus}
-   (op: Associative R plus) (op': Commutative R plus) (po: Proper (R ==> R ==> R) plus).
-
-  (* copy n x = x+...+x (n times) *)
-  Fixpoint copy' n x := match n with
-                         | xH => x
-                         | xI n => let xn := copy' n x in plus (plus xn xn) x
-                         | xO n => let xn := copy' n x in (plus xn xn)
-                       end.
-  Definition copy n x :=  Prect (fun _ => X) x (fun _ xn => plus x xn) n.
-     
-  Lemma copy_plus : forall n m x, R (copy (n+m) x) (plus (copy n x) (copy m x)).
-  Proof.
-    unfold copy.
-    induction n using Pind; intros m x.
-     rewrite Prect_base. rewrite <- Pplus_one_succ_l. rewrite Prect_succ. reflexivity. 
-     rewrite Pplus_succ_permute_l. rewrite 2Prect_succ. rewrite IHn. apply op.
-  Qed.
-  Lemma copy_xH : forall x, R (copy 1 x) x.
-  Proof. intros; unfold copy; rewrite Prect_base. reflexivity. Qed.
-  Lemma copy_Psucc : forall n x, R (copy (Pos.succ n) x) (plus x (copy n x)).
-  Proof. intros; unfold copy; rewrite Prect_succ. reflexivity. Qed.
-
-  Global Instance copy_compat n: Proper (R ==> R) (copy n).
-  Proof.
-    unfold copy.
-    induction n using Pind; intros x y H.
-     rewrite 2Prect_base. assumption.
-     rewrite 2Prect_succ. apply po; auto.
-  Qed.
-
-End copy.
 
 (** * Packaging structures *)
 
@@ -876,7 +830,7 @@ End Internal.
 Local Ltac internal_normalize :=
   let x := fresh in let y := fresh in
   intro x; intro y; vm_compute in x; vm_compute in y; unfold x; unfold y;
-  compute [Internal.eval Utils.fold_map Internal.copy Prect]; simpl.
+  compute [Internal.eval Utils.fold_map Utils.copy Prect]; simpl.
 
 
 (** * Lemmas for performing transitivity steps

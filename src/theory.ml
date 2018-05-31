@@ -31,6 +31,7 @@ module HMap = Hashtbl.Make(Constr)
 
 let ac_theory_path = ["AAC_tactics"; "AAC"]
 let ac_util_path = ["AAC_tactics"; "Utils"]
+let ac_interface_path = ["AAC_tactics"; "Interface"]
 
 module Stubs = struct
   let path = ac_theory_path@["Internal"]
@@ -67,7 +68,7 @@ end
 module Classes = struct 
   module Associative = struct
     let path = ac_theory_path
-    let typ = lazy (Coq.init_constant path "Associative")
+    let typ = lazy (Coq.init_constant ac_interface_path "Associative")
     let ty (rlt : Coq.Relation.t) (value : constr) =
       mkApp (Lazy.force typ, [| rlt.Coq.Relation.carrier;
 				rlt.Coq.Relation.r;
@@ -80,7 +81,7 @@ module Classes = struct
    
   module Commutative = struct
     let path = ac_theory_path
-    let typ = lazy (Coq.init_constant path "Commutative")
+    let typ = lazy (Coq.init_constant ac_interface_path "Commutative")
     let ty (rlt : Coq.Relation.t) (value : constr) =
       mkApp (Lazy.force typ, [| rlt.Coq.Relation.carrier;
 				rlt.Coq.Relation.r;
@@ -111,7 +112,7 @@ module Classes = struct
     
   module Unit = struct
     let path = ac_theory_path
-    let typ = lazy (Coq.init_constant path "Unit")
+    let typ = lazy (Coq.init_constant ac_interface_path "Unit")
     let ty (rlt : Coq.Relation.t) (value : constr) (unit : constr)=
       mkApp (Lazy.force typ, [| rlt.Coq.Relation.carrier;
  				rlt.Coq.Relation.r;

@@ -11,6 +11,7 @@ Require Import Arith NArith.
 Require Import List.
 Require Import FMapPositive FMapFacts.
 Require Import RelationClasses Equality.
+Require Import Interface.
 
 Set Implicit Arguments.
 Set Asymmetric Patterns.
@@ -115,6 +116,12 @@ Fixpoint appne  A l l' : nelist A :=
   match l with
     nil x => cons x l'
     | cons t q => cons t (appne A q l')
+  end.
+
+Fixpoint lastne {A} l : A :=
+  match l with
+    nil x => x
+  | cons x l => lastne l
   end.
 
 Notation "x ++ y" := (appne x y).
@@ -255,3 +262,40 @@ Section lists.
 
   End m.
 End lists.
+
+(** * Utilities for the evaluation function *)
+
+Section copy.
+
+  Context {X} {R} {HR: @Equivalence X R} {plus}
+   (op: Associative R plus) (op': Commutative R plus) (po: Proper (R ==> R ==> R) plus).
+
+  (* copy n x = x+...+x (n times) *)
+  Fixpoint copy' n x := match n with
+                         | xH => x
+                         | xI n => let xn := copy' n x in plus (plus xn xn) x
+                         | xO n => let xn := copy' n x in (plus xn xn)
+                       end.
+  Definition copy n x :=  Prect (fun _ => X) x (fun _ xn => plus x xn) n.
+     
+  Lemma copy_plus : forall n m x, R (copy (n+m) x) (plus (copy n x) (copy m x)).
+  Proof.
+    unfold copy.
+    induction n using Pind; intros m x.
+     rewrite Prect_base. rewrite <- Pplus_one_succ_l. rewrite Prect_succ. reflexivity. 
+     rewrite Pplus_succ_permute_l. rewrite 2Prect_succ. rewrite IHn. apply op.
+  Qed.
+  Lemma copy_xH : forall x, R (copy 1 x) x.
+  Proof. intros; unfold copy; rewrite Prect_base. reflexivity. Qed.
+  Lemma copy_Psucc : forall n x, R (copy (Pos.succ n) x) (plus x (copy n x)).
+  Proof. intros; unfold copy; rewrite Prect_succ. reflexivity. Qed.
+
+  Global Instance copy_compat n: Proper (R ==> R) (copy n).
+  Proof.
+    unfold copy.
+    induction n using Pind; intros x y H.
+     rewrite 2Prect_base. assumption.
+     rewrite 2Prect_succ. apply po; auto.
+  Qed.
+
+End copy.
