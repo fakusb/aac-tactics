@@ -157,10 +157,10 @@ let mk_mset ty (l : (constr * int) list) =
     aux l
 
 module Sigma = struct
-  let sigma = lazy (Coq.init_constant ac_theory_path "sigma")
-  let sigma_empty = lazy (Coq.init_constant ac_theory_path "sigma_empty")
-  let sigma_add = lazy (Coq.init_constant ac_theory_path "sigma_add")
-  let sigma_get = lazy (Coq.init_constant ac_theory_path "sigma_get")
+  let sigma = lazy (Coq.init_constant ac_util_path "sigma")
+  let sigma_empty = lazy (Coq.init_constant ac_util_path "sigma_empty")
+  let sigma_add = lazy (Coq.init_constant ac_util_path "sigma_add")
+  let sigma_get = lazy (Coq.init_constant ac_util_path "sigma_get")
    
   let add ty n x map =
     mkApp (Lazy.force sigma_add,[|ty; n; x ;  map|])

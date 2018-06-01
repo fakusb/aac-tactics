@@ -39,20 +39,6 @@ Set Asymmetric Patterns.
 
 Local Open Scope signature_scope.
 
-(** * Environments for the reification process: we use positive maps to index elements *)
-
-Section sigma.
-  Definition sigma := PositiveMap.t.
-  Definition sigma_get A (null : A) (map : sigma A) (n : positive) : A :=
-    match PositiveMap.find n map with
-      | None => null
-      | Some x => x
-    end.
-  Definition sigma_add := @PositiveMap.add.
-  Definition sigma_empty := @PositiveMap.empty.
-End sigma.
-
-
 
 (** Class used to find the equivalence relation on which operations
    are A or AC, starting from the relation appearing in the goal *)

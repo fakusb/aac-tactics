@@ -21,6 +21,21 @@ Set Asymmetric Patterns.
      - indices for morphisms and symbols
      - multiplicity of terms in sums *)
 
+(** * Environments for the reification process: we use positive maps to index elements *)
+
+Section sigma.
+  Definition sigma := PositiveMap.t.
+  Definition sigma_get A (null : A) (map : sigma A) (n : positive) : A :=
+    match PositiveMap.find n map with
+      | None => null
+      | Some x => x
+    end.
+  Definition sigma_add := @PositiveMap.add.
+  Definition sigma_empty := @PositiveMap.empty.
+  Global Arguments sigma_empty {_}.
+End sigma.
+
+
 Notation idx := positive.
 
 Fixpoint eq_idx_bool i j :=

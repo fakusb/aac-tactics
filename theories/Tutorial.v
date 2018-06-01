@@ -30,7 +30,7 @@ Section introduction.
   Variables a b c : Z.
   Hypothesis H: forall x, x + Z.opp x = 0.
   Goal a + b + c + Z.opp (c + a) = b.
-    aac_rewrite H.
+    aac_rewrite H. Show Proof. 
     aac_reflexivity.
   Qed.
   Goal a + c + Z.opp (b + a + Z.opp b) = c.

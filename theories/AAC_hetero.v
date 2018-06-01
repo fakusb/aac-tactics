@@ -26,7 +26,8 @@ Require Import Utils.
 Require Import BinPos.
 Require Export Interface.
 Require Import List.
-
+Require Import PeanoNat. 
+Import List.ListNotations.
 Local Open Scope list_scope.
 
 
@@ -39,7 +40,8 @@ Module ReifH.
     (* We use environments to store the various operators and the
      morphisms.*)
 
-    Variable e_type: idx -> Type.
+    Local Notation idT := nat.
+    Variable e_type: nat -> Type.
 
     (* TODO: e_rel for different relations?*)
     (*Variable e_rel : forall iTy, e_type iTy -> e_type iTy -> Prop.*)
@@ -47,7 +49,7 @@ Module ReifH.
     (** ** free symbols  *)
     Section Sym.
       (** type of an arity  *)
-      Fixpoint type_of_ar (args: list idx) ret:=
+      Fixpoint type_of_ar (args: list idT) ret:=
         match args with
         | nil => e_type ret
         | i::args => (e_type i) -> type_of_ar args ret
@@ -56,7 +58,7 @@ Module ReifH.
       (** a symbol package contains an arity and a value of the corresponding type*)
       Record Sym iTy: Type :=
         mkSym {
-            sym_args : list idx;
+            sym_args : list idT;
             sym_value :> type_of_ar sym_args iTy;
           }.
 
@@ -72,7 +74,7 @@ Module ReifH.
             bin_comm: option (Commutative eq bin_value)
           }.
     End Bin.
-
+    
     Arguments bin_value : clear implicits.
     Arguments bin_value {iTy} _.
 
@@ -96,13 +98,13 @@ Module ReifH.
         }.
     Variable e_unit: forall iTy, idx -> unit_pack iTy.
 
-    Inductive T: idx -> Type :=
-    | sum (iTy i : idx): mset (T iTy) -> T iTy
+    Inductive T: idT -> Type :=
+    | sum iTy (i : idx): mset (T iTy) -> T iTy
     (*| prd: idx -> nelist T -> T*)
-    | sym (iTy i : idx):
+    | sym iTy (i : idx):
              vT (sym_args (e_sym iTy i)) -> T iTy
-    | unit (iTy j:idx): T iTy
-    with vT: list idx -> Type :=
+    | unit iTy (j:idx): T iTy
+    with vT: list idT -> Type :=
          | vnil: vT nil
          | vcons X ar: T X -> vT ar -> vT (X::ar).
 
@@ -162,11 +164,11 @@ Module ReifH.
        +intros []. 1,2:now constructor. cbn.
         case (pos_compare_weak_spec j j0); intros; try constructor. 
       -induction us; destruct vs; simpl; intros H Huv; try discriminate.
-       +apply cast_eq, list_eq_dec, Pos.eq_dec.
+       +apply cast_eq, list_eq_dec, Nat.eq_dec.
        +inversion H. subst.
         revert Huv. case (tcompare_weak_spec _ t t0). 2,3:easy.
         intro. intros H'. apply IHus with (H:=eq_refl) in H'. cbn in H'. subst.
-        apply cast_eq,list_eq_dec,Pos.eq_dec. 
+        apply cast_eq,list_eq_dec,Nat.eq_dec. 
     Qed.
     (*
     Instance eval_aux_compat i (l: vT i): Proper (sym.rel_of X R i ==> R) (eval_aux l).
@@ -208,7 +210,7 @@ Module ReifH.
   (** auxiliary functions, to clean up sums  *)
 
   Section sums.
-    Variable iTy : idx. (* index of the Type to look at *)
+    Variable iTy : idT. (* index of the Type to look at *)
     Variable i : idx. (* index of binary function to normalise *)
     Variable is_unit : idx -> bool.
 
@@ -331,7 +333,7 @@ Module ReifH.
 
   (** ** Correctness *)
 
-  Lemma is_unit_of_Unit  : forall iTy i j : idx,
+  Lemma is_unit_of_Unit  : forall iTy (i j : idx),
    is_unit_of iTy i j = true -> Unit (@eq (e_type iTy)) (bin_value (e_bin iTy i)) (eval (unit iTy j)).
   Proof.
     intros. unfold is_unit_of in H.
@@ -364,7 +366,8 @@ Module ReifH.
 
   Hint Resolve is_unit_of_Unit.
   Section sum_correctness.
-    Variable iTy i : idx. (* The binary operator of the sum*)
+    Variable iTy : idT.
+    Variable i : idx. (* The binary operator of the sum*)
     Variable is_unit : idx -> bool.
     Hypothesis is_unit_sum_Unit : forall j, is_unit j = true -> @Unit _ eq (bin_value (e_bin iTy i)) (eval (unit iTy j)).
 
@@ -734,3 +737,39 @@ Module ReifH.
   End ReifH.
 End ReifH.
 
+Section test.
+  Require Import Arith NArith.
+  Goal (forall (x y :nat), x + 1 <= y -> x + 2 <= 1 + y).
+
+  Proof. 
+    intros x y H.
+    pose (e_type iTy := List.nth iTy [Prop;nat:Type] unit). 
+    pose (e_sym_def iTy def (i:idx) := ReifH.mkSym e_type iTy [] def). Print Scopes.
+    pose (e_sym_prop := sigma_get (ReifH.mkSym e_type 0 [1;1] le) (sigma_add 1%positive (ReifH.mkSym e_type 0 [1;1] le) sigma_empty)).
+    pose (e_sym_nat := sigma_get (ReifH.mkSym e_type 1 [] O)
+                                 (sigma_add 3%positive (ReifH.mkSym _ 1 [] y)
+                                            (sigma_add 3%positive (ReifH.mkSym _ 1 [] x)
+                                                       (sigma_add 2%positive (ReifH.mkSym e_type 1 [] O)
+                                                                  (sigma_add 1%positive (ReifH.mkSym e_type 1 [1] S) sigma_empty))))). 
+    pose (e_sym iTy :=
+            match iTy return idx -> ReifH.Sym e_type iTy with
+              0 => e_sym_prop
+            | 1 => e_sym_nat
+            | 2 => fun i => ReifH.mkSym e_type 2 [] tt (* List.nth does a match on the nat to much...*)
+            | S (S iTy) => fun i => ReifH.mkSym e_type (S (S iTy)) [] tt
+            end).
+
+    (* TODO: - having no symbol or binOp is possible for any type, so this needs to be encorperated *)
+
+    pose (e_bin iTy :=
+            match iTy return idx -> ReifH.Bin e_type iTy with
+              | 0 => fun _ => ReifH.
+            end)
+            projT2 (P:=e_type)
+                   (BinList.nth (sigT 2) iTy
+                                
+                    then {} )
+                       pose (e_bin_nat := sigma_get (ReifH.mkBin e_type 1 plus_assoc) (sigma_add 1 (ReifH.mkBin e_type 1 plus_assoc) sigma_empty)).
+
+  
+End test. 
