@@ -101,30 +101,30 @@ End dep.
 (** * Utilities about (non-empty) lists and multisets  *)
 
 Inductive nelist (A : Type) : Type :=
-| nil : A -> nelist A
-| cons : A -> nelist A -> nelist A.
+| nilne : A -> nelist A
+| consne : A -> nelist A -> nelist A.
 
-Notation "x :: y" := (cons x y).
+ Infix ":::" := consne (at level 60, right associativity).
 
 Fixpoint nelist_map (A B: Type) (f: A -> B) l :=
   match l with
-    | nil x => nil ( f x)
-    | cons x l => cons ( f x) (nelist_map  f l)
+    | nilne x => nilne ( f x)
+    | consne x l => (f x) ::: (nelist_map  f l)
   end.
 
 Fixpoint appne  A l l' : nelist A :=
   match l with
-    nil x => cons x l'
-    | cons t q => cons t (appne A q l')
+    nilne x => x:::l'
+    | t ::: q => t:::(appne A q l')
   end.
 
 Fixpoint lastne {A} l : A :=
   match l with
-    nil x => x
-  | cons x l => lastne l
+    nilne x => x
+  | x ::: l => lastne l
   end.
 
-Notation "x ++ y" := (appne x y).
+Notation "x '+++' y" := (appne x y) (at level 60, right associativity).
 
 (** finite multisets are represented with ordered lists with multiplicities *)
 Definition mset A := nelist (A*positive).
@@ -142,10 +142,10 @@ Section lists.
     Variable compare: A -> B -> comparison.
     Fixpoint list_compare h k :=
       match h,k with
-        | nil x, nil y => compare x y
-        | nil x, _   => Lt
-        | _,   nil x => Gt
-        | u::h, v::k => lex (compare u v) (list_compare h k)
+        | nilne x, nilne y => compare x y
+        | nilne x, _   => Lt
+        | _,   nilne x => Gt
+        | u:::h, v:::k => lex (compare u v) (list_compare h k)
       end. 
   End c.
   Definition mset_compare A B compare: mset A -> mset B -> comparison :=
@@ -195,38 +195,38 @@ Section lists.
     Definition insert n1 h1 :=
       let fix insert_aux l2 :=
       match l2 with
-        | nil (h2,n2) =>
+        | nilne (h2,n2) =>
           match compare h1 h2 with
-            | Eq => nil (h1,Pplus n1 n2)
-            | Lt => (h1,n1):: nil (h2,n2)
-            | Gt => (h2,n2):: nil (h1,n1)
+            | Eq => nilne (h1,Pplus n1 n2)
+            | Lt => (h1,n1)::: nilne (h2,n2)
+            | Gt => (h2,n2)::: nilne (h1,n1)
           end
-        | (h2,n2)::t2 =>
+        | (h2,n2):::t2 =>
           match compare h1 h2 with
-            | Eq => (h1,Pplus n1 n2):: t2
-            | Lt => (h1,n1)::l2
-            | Gt => (h2,n2)::insert_aux t2
+            | Eq => (h1,Pplus n1 n2)::: t2
+            | Lt => (h1,n1):::l2
+            | Gt => (h2,n2):::insert_aux t2
           end
       end
       in insert_aux.
    
     Fixpoint merge_msets l1 :=
       match l1 with
-        | nil (h1,n1) => fun l2 => insert n1 h1 l2
-        | (h1,n1)::t1 =>
+        | nilne (h1,n1) => fun l2 => insert n1 h1 l2
+        | (h1,n1):::t1 =>
           let fix merge_aux l2 :=
             match l2 with
-               | nil (h2,n2) =>
+               | nilne (h2,n2) =>
                 match compare h1 h2 with
-                  | Eq => (h1,Pplus n1 n2) :: t1
-                  | Lt => (h1,n1):: merge_msets t1 l2
-                  | Gt => (h2,n2)::  l1
+                  | Eq => (h1,Pplus n1 n2) ::: t1
+                  | Lt => (h1,n1)::: merge_msets t1 l2
+                  | Gt => (h2,n2):::  l1
                 end
-              | (h2,n2)::t2 =>
+              | (h2,n2):::t2 =>
                 match compare h1 h2 with
-                  | Eq => (h1,Pplus n1 n2)::merge_msets t1 t2
-                  | Lt => (h1,n1)::merge_msets t1 l2
-                  | Gt => (h2,n2)::merge_aux t2
+                  | Eq => (h1,Pplus n1 n2):::merge_msets t1 t2
+                  | Lt => (h1,n1):::merge_msets t1 l2
+                  | Gt => (h2,n2):::merge_aux t2
                 end
             end
             in merge_aux
@@ -239,8 +239,8 @@ Section lists.
     Variable b2: B -> B -> B.
     Fixpoint fold_map l :=
       match l with
-        | nil x => map x
-        | u::l => b2 (map u) (fold_map l)
+        | nilne x => map x
+        | u:::l => b2 (map u) (fold_map l)
       end.
 
     (** mapping and merging *)
@@ -248,16 +248,16 @@ Section lists.
     Variable merge: A -> nelist B -> nelist B.
     Fixpoint merge_map (l: nelist A): nelist B :=
       match l with
-        | nil x => nil (map x)
-        | u::l => merge u (merge_map l)
+        | nilne x => nilne (map x)
+        | u:::l => merge u (merge_map l)
       end.
 
     Variable ret : A -> B.
     Variable bind : A -> B -> B.
     Fixpoint fold_map' (l : nelist A) : B :=
       match l with
-        | nil x => ret x
-        | u::l => bind u (fold_map' l)
+        | nilne x => ret x
+        | u:::l => bind u (fold_map' l)
       end.
 
   End m.

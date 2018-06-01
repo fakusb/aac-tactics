@@ -126,9 +126,9 @@ end
 (* Non empty lists *)
 module NEList = struct
   let path = ac_util_path 
-  let typ = lazy (Coq.init_constant path "list")
-  let nil = lazy (Coq.init_constant path "nil")
-  let cons = lazy (Coq.init_constant path "cons")
+  let typ = lazy (Coq.init_constant path "nelist")
+  let nil = lazy (Coq.init_constant path "nilne")
+  let cons = lazy (Coq.init_constant path "consne")
   let cons ty h t =
     mkApp (Lazy.force cons, [|  ty; h ; t |])
   let nil ty x =

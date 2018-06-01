@@ -301,7 +301,7 @@ Section s.
 
     Definition sum' (u: mset T): T :=
       match u with
-        | nil (u,xH) => u
+        | nilne (u,xH) => u
         | _ => sum i u
       end.
 
@@ -320,14 +320,14 @@ Section s.
    
     Definition return_sum  u n :=
       match is_sum  u with
-        | Is_nothing => right (nil (u,n))
+        | Is_nothing => right (nilne (u,n))
         | Is_op l' =>  right (copy_mset n l')
         | Is_unit j => left j
       end.
    
     Definition add_to_sum u n (l : @m idx (mset T))  :=
       match is_sum  u with
-        | Is_nothing => comp (merge_msets compare) (nil (u,n)) l
+        | Is_nothing => comp (merge_msets compare) (nilne (u,n)) l
         | Is_op l' => comp (merge_msets compare) (copy_mset n l') l
         | Is_unit _ => l
     end.
@@ -349,7 +349,7 @@ Section s.
     Variable is_unit : idx -> bool.
     Definition prd'  (u: nelist T): T :=
     match u with
-      | nil u => u
+      | nilne u => u
       | _ => prd i u
     end.
 
@@ -363,14 +363,14 @@ Section s.
    
     Definition return_prd u :=
       match is_prd u with
-        | Is_nothing => right (nil (u))
+        | Is_nothing => right (nilne (u))
         | Is_op l' =>  right (l')
         | Is_unit j => left j
       end.
    
     Definition add_to_prd  u  (l : @m idx (nelist T))  :=
       match is_prd  u with
-        | Is_nothing => comp (@appne T) (nil (u)) l
+        | Is_nothing => comp (@appne T) (nilne (u)) l
         | Is_op l' => comp (@appne T) (l') l
         | Is_unit _ => l
       end.
@@ -385,7 +385,7 @@ Section s.
 
 
   Definition run_list x := match x with
-                        | left n => nil (unit n)
+                        | left n => nilne (unit n)
                         | right l => l
                       end.
  
@@ -394,7 +394,7 @@ Section s.
       run_list (norm_lists_ i is_unit norm l).
 
   Definition run_msets x := match x with
-                        | left n => nil (unit n, xH)
+                        | left n => nilne (unit n, xH)
                         | right l => l
                       end.
  
@@ -481,12 +481,12 @@ Section s.
       intros [[a n] | [a n] l]; destruct n;  simpl; reflexivity.
     Qed.
 
-    Lemma eval_sum_nil x:
-      eval (sum i (nil (x,xH))) == (eval x).
+    Lemma eval_sum_nilne x:
+      eval (sum i (nilne (x,xH))) == (eval x).
     Proof. rewrite <- sum'_sum. reflexivity.   Qed.
      
     Lemma eval_sum_cons : forall n a (l: mset T),
-      (eval (sum i ((a,n)::l))) == (@Bin.value _ _ (e_bin i) (@copy _ (@Bin.value _ _ (e_bin i)) n (eval a)) (eval (sum i l))).
+      (eval (sum i ((a,n):::l))) == (@Bin.value _ _ (e_bin i) (@copy _ (@Bin.value _ _ (e_bin i)) n (eval a)) (eval (sum i l))).
     Proof.
       intros n a [[? ? ]|[b m] l]; simpl; reflexivity.
     Qed.
@@ -599,7 +599,7 @@ Section s.
       unfold comp. unfold run_msets.
       case_eq r; intros; subst.
       rewrite eval_merge_bin; auto.
-      rewrite eval_sum_nil.
+      rewrite eval_sum_nilne.
       apply compat_sum_unit_Unit in H. rewrite law_neutral_right.  reflexivity.
       reflexivity.
     Qed.
@@ -613,7 +613,7 @@ Section s.
       rewrite copy_mset_copy.
       reflexivity.
      
-      rewrite eval_sum_nil. apply copy_n_unit. auto.
+      rewrite eval_sum_nilne. apply copy_n_unit. auto.
       reflexivity.
     Qed.
     Lemma z2 : forall  u n x, compat_sum_unit  x ->
@@ -682,15 +682,15 @@ Section s.
     Qed.
    
    
-    Lemma eval_prd_nil x:  eval (prd i (nil x)) == eval x. 
+    Lemma eval_prd_nilne x:  eval (prd i (nilne x)) == eval x. 
     Proof.
       rewrite <- prd'_prd. simpl. reflexivity.
     Qed.
-    Lemma eval_prd_cons a : forall (l: nelist T), eval (prd i (a::l)) == @Bin.value _ _ (e_bin i) (eval a) (eval (prd i l)).
+    Lemma eval_prd_cons a : forall (l: nelist T), eval (prd i (a:::l)) == @Bin.value _ _ (e_bin i) (eval a) (eval (prd i l)).
     Proof.
       intros  [|b l]; simpl; reflexivity.
     Qed.       
-    Lemma eval_prd_app : forall (h k: nelist T), eval (prd i (h++k)) == @Bin.value _ _ (e_bin i) (eval (prd i h)) (eval (prd i k)).
+    Lemma eval_prd_app : forall (h k: nelist T), eval (prd i (h+++k)) == @Bin.value _ _ (e_bin i) (eval (prd i h)) (eval (prd i k)).
     Proof.
       induction h; intro k. simpl; try reflexivity.
       simpl appne.  rewrite  2 eval_prd_cons, IHh, law_assoc. reflexivity.
@@ -736,12 +736,12 @@ Section s.
       intros.
       unfold comp. unfold run_list. case_eq r; intros; auto; subst.
       rewrite eval_prd_app.
-      rewrite eval_prd_nil.
+      rewrite eval_prd_nilne.
       apply compat_prd_Unit in H. rewrite law_neutral_right. reflexivity.
       reflexivity.
     Qed.
  
-    Lemma z1' a :  eval (prd i (run_list (return_prd i is_unit a))) ==  eval (prd i (nil a)).
+    Lemma z1' a :  eval (prd i (run_list (return_prd i is_unit a))) ==  eval (prd i (nilne a)).
     Proof.
       intros. unfold return_prd.  unfold run_list.
       case (is_prd_spec); intros; subst; reflexivity.
