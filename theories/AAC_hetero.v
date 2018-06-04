@@ -41,7 +41,16 @@ Module ReifH.
      morphisms.*)
 
     Local Notation idT := nat.
-    Variable e_type: nat -> Type.
+    Variable l_type : nelist Type.
+
+    Fixpoint nthne X n (l:nelist X) {struct l}: X :=
+      match l,n with
+        nilne x,_ => x
+      | consne x _,0 => x
+      | consne _ l,S n => nthne n l
+      end. 
+    
+    Let e_type := (fun i => nthne i l_type).
 
     (* TODO: e_rel for different relations?*)
     (*Variable e_rel : forall iTy, e_type iTy -> e_type iTy -> Prop.*)
@@ -94,7 +103,7 @@ Module ReifH.
     Record unit_pack iTy :=
       mk_unit_pack {
           u_value:> e_type iTy;
-          u_desc: list (unit_of u_value)
+          u_desc: list (unit_of _ u_value)
         }.
     Variable e_unit: forall iTy, idx -> unit_pack iTy.
 
@@ -736,40 +745,3 @@ Module ReifH.
 
   End ReifH.
 End ReifH.
-
-Section test.
-  Require Import Arith NArith.
-  Goal (forall (x y :nat), x + 1 <= y -> x + 2 <= 1 + y).
-
-  Proof. 
-    intros x y H.
-    pose (e_type iTy := List.nth iTy [Prop;nat:Type] unit). 
-    pose (e_sym_def iTy def (i:idx) := ReifH.mkSym e_type iTy [] def). Print Scopes.
-    pose (e_sym_prop := sigma_get (ReifH.mkSym e_type 0 [1;1] le) (sigma_add 1%positive (ReifH.mkSym e_type 0 [1;1] le) sigma_empty)).
-    pose (e_sym_nat := sigma_get (ReifH.mkSym e_type 1 [] O)
-                                 (sigma_add 3%positive (ReifH.mkSym _ 1 [] y)
-                                            (sigma_add 3%positive (ReifH.mkSym _ 1 [] x)
-                                                       (sigma_add 2%positive (ReifH.mkSym e_type 1 [] O)
-                                                                  (sigma_add 1%positive (ReifH.mkSym e_type 1 [1] S) sigma_empty))))). 
-    pose (e_sym iTy :=
-            match iTy return idx -> ReifH.Sym e_type iTy with
-              0 => e_sym_prop
-            | 1 => e_sym_nat
-            | 2 => fun i => ReifH.mkSym e_type 2 [] tt (* List.nth does a match on the nat to much...*)
-            | S (S iTy) => fun i => ReifH.mkSym e_type (S (S iTy)) [] tt
-            end).
-
-    (* TODO: - having no symbol or binOp is possible for any type, so this needs to be encorperated *)
-
-    pose (e_bin iTy :=
-            match iTy return idx -> ReifH.Bin e_type iTy with
-              | 0 => fun _ => ReifH.
-            end)
-            projT2 (P:=e_type)
-                   (BinList.nth (sigT 2) iTy
-                                
-                    then {} )
-                       pose (e_bin_nat := sigma_get (ReifH.mkBin e_type 1 plus_assoc) (sigma_add 1 (ReifH.mkBin e_type 1 plus_assoc) sigma_empty)).
-
-  
-End test. 
