@@ -109,7 +109,7 @@ Module ReifH.
 
     Inductive T: idT -> Type :=
     | sum iTy (i : idx): mset (T iTy) -> T iTy
-    (*| prd: idx -> nelist T -> T*)
+    | prd iTy: idx -> nelist (T iTy) -> T iTy
     | sym iTy (i : idx):
              vT (sym_args (e_sym iTy i)) -> T iTy
     | unit iTy (j:idx): T iTy
@@ -121,15 +121,15 @@ Module ReifH.
     Fixpoint compare {iTy jTy} (u: T iTy) (v: T jTy) :=
       match u,v with
       | sum iTy i l, sum _ j vs => lex (idx_compare i j) (mset_compare compare l vs)
-      (*| prd i l, prd j vs => lex (idx_compare i j) (list_compare compare l vs)*)
+      | prd iTy i l, prd _ j vs => lex (idx_compare i j) (list_compare compare l vs)
       | sym iTy i l, sym jTy j vs => lex (idx_compare i j) (vcompare l vs)
       | unit _ i , unit _ j => (idx_compare i j)
       | unit _ _ , _        => Lt
       | _      , unit _ _  => Gt
       | sum _ _ _, _        => Lt
       | _      , sum _ _ _  => Gt
-      (*| prd _ _, _        => Lt
-      | _      , prd _ _  => Gt*)
+      | prd _ _ _, _        => Lt
+      | _      , prd _ _ _  => Gt
 
       end
     with vcompare {ar1 ar2} (us: vT ar1) (vs: vT ar2) :=
@@ -146,7 +146,7 @@ Module ReifH.
       match u with
       | sum iTy i l => let o := bin_value (e_bin iTy i) in
                   fold_map (fun un => let '(u,n):=un in @copy _ o n (eval u)) o l
-      (*| prd i l => fold_map eval (Bin.value (e_bin i)) l*)
+      | prd iTy i l => fold_map eval (bin_value (e_bin iTy i)) l
       | sym iTy i v => eval_aux v (sym_value (e_sym iTy i))
       | unit iTy i  => e_unit iTy i
       end
@@ -166,11 +166,14 @@ Module ReifH.
        +destruct v; simpl; try constructor.
         case (pos_compare_weak_spec i i0); intros; try constructor.
         case (mset_compare_weak_spec compare (tcompare_weak_spec iTy) m m0); intros; try constructor.
-       +intros u. destruct u. 1,3:now constructor. cbn.
+       +destruct v; simpl; try constructor.
+        case (pos_compare_weak_spec p p0); intros; try constructor.
+        case (list_compare_weak_spec compare (tcompare_weak_spec iTy) n n0); intros; try constructor.
+       +intros u. destruct u. 1,2,4:now constructor. cbn.
         destruct (pos_compare_weak_spec i i0); intros; try constructor.   
         case_eq (vcompare v v0); intro Hv; try constructor.
         rewrite <- (vcompare_reflect_eqdep _ _ _ _ eq_refl Hv). cbn. constructor.
-       +intros []. 1,2:now constructor. cbn.
+       +intros []. 1,2,3:now constructor. cbn.
         case (pos_compare_weak_spec j j0); intros; try constructor. 
       -induction us; destruct vs; simpl; intros H Huv; try discriminate.
        +apply cast_eq, list_eq_dec, Nat.eq_dec.
@@ -268,55 +271,55 @@ Module ReifH.
  
   (** similar functions for products *)
 
-  (* Section prds. *)
+  Section prds.
+    Variable iTy : idT.
+    Variable i : idx.
+    Variable is_unit : idx -> bool.
+    Definition prd'  (u: nelist (T iTy)): T iTy :=
+    match u with
+      | nilne u => u
+      | _ => prd i u
+    end.
 
-  (*   Variable i : idx. *)
-  (*   Variable is_unit : idx -> bool. *)
-  (*   Definition prd'  (u: nelist T): T := *)
-  (*   match u with *)
-  (*     | nil u => u *)
-  (*     | _ => prd i u *)
-  (*   end. *)
-
-  (*   Definition is_prd (u: T) : @discr (nelist T) := *)
-  (*   match u with *)
-  (*     | prd j l => if eq_idx_bool j i then Is_op l else Is_nothing *)
-  (*     | unit j => if is_unit j  then Is_unit j else Is_nothing *)
-  (*     | u => Is_nothing *)
-  (*   end. *)
+    Definition is_prd (u: T iTy) : @discr (nelist (T iTy)) :=
+    match u with
+      | prd iTy j l => if eq_idx_bool j i then Is_op l else Is_nothing
+      | unit iTy j => if is_unit j  then Is_unit j else Is_nothing
+      | u => Is_nothing
+    end.
  
    
-  (*   Definition return_prd u := *)
-  (*     match is_prd u with *)
-  (*       | Is_nothing => right (nil (u)) *)
-  (*       | Is_op l' =>  right (l') *)
-  (*       | Is_unit j => left j *)
-  (*     end. *)
+    Definition return_prd u :=
+      match is_prd u with
+        | Is_nothing => right (nilne (u))
+        | Is_op l' =>  right (l')
+        | Is_unit j => left j
+      end.
    
-  (*   Definition add_to_prd  u  (l : @m idx (nelist T))  := *)
-  (*     match is_prd  u with *)
-  (*       | Is_nothing => comp (@appne T) (nil (u)) l *)
-  (*       | Is_op l' => comp (@appne T) (l') l *)
-  (*       | Is_unit _ => l *)
-  (*     end. *)
+    Definition add_to_prd  u  (l : @m idx (nelist (T iTy)))  :=
+      match is_prd  u with
+        | Is_nothing => comp (@appne (T iTy)) (nilne (u)) l
+        | Is_op l' => comp (@appne (T iTy)) (l') l
+        | Is_unit _ => l
+      end.
 
-  (*   Definition norm_lists_ norm (l : nelist T) := *)
-  (*   fold_map' *)
-  (*   (fun u => return_prd  (norm u)) *)
-  (*   (fun u l => add_to_prd (norm u) l) l. *)
-
-
-  (* End prds. *)
+    Definition norm_lists_ norm (l : nelist (T iTy)) :=
+    fold_map'
+    (fun u => return_prd  (norm u))
+    (fun u l => add_to_prd (norm u) l) l.
 
 
-  (* Definition run_list x := match x with *)
-  (*                       | left n => nil (unit n) *)
-  (*                       | right l => l *)
-  (*                     end. *)
+  End prds.
+
+
+  Definition run_list {iTy} x := match x with
+                        | left n => nilne (unit iTy n)
+                        | right l => l
+                      end.
  
-  (* Definition norm_lists norm i l := *)
-  (*   let is_unit := is_unit_of i in *)
-  (*     run_list (norm_lists_ i is_unit norm l). *)
+  Definition norm_lists {iTy} (norm: T iTy -> T iTy) i l :=
+    let is_unit := is_unit_of iTy i in
+      run_list (norm_lists_ i is_unit norm l).
 
   Definition run_msets {iTy} x := match x with
                         | left n => nilne (unit iTy n, xH)
@@ -330,7 +333,7 @@ Module ReifH.
   Fixpoint norm {iTy} (u:T iTy) {struct u} : T iTy:=
     match u with
       | sum iTy i l as u => if is_commutative iTy i then sum' i (norm_msets norm i l) else u
-      (* | prd i l => prd' i (norm_lists norm i l) *)
+      | prd iTy i l => prd' i (norm_lists norm i l)
       | sym iTy i l => sym iTy i (vnorm l)
       | unit iTy i as u => u
     end
@@ -577,133 +580,129 @@ Module ReifH.
  
   (** auxiliary lemmas about products  *)
 
-  (* Section prd_correctness. *)
-  (*   Variable iTy i : idx. *)
-  (*   Variable is_unit : idx -> bool. *)
-  (*   Hypothesis is_unit_prd_Unit : forall j, is_unit j = true->  @Unit _ eq (bin_value (e_bin iTy i)) (eval (unit j)). *)
+  Section prd_correctness.
+    Variable iTy : idT. 
+    Variable i : idx.
+    Variable is_unit : idx -> bool.
+    Hypothesis is_unit_prd_Unit : forall j, is_unit j = true->  @Unit _ eq (bin_value (e_bin iTy i)) (eval (unit iTy j)).
 
-  (*   Inductive is_prd_spec_ind  : T ->  @discr (nelist T) -> Prop := *)
-  (*   | is_prd_spec_op : *)
-  (*     forall j l, j = i -> is_prd_spec_ind (prd j l) (Is_op l) *)
-  (*   | is_prd_spec_unit : *)
-  (*     forall j, is_unit j = true ->  is_prd_spec_ind (unit j) (Is_unit j) *)
-  (*   | is_prd_spec_nothing : *)
-  (*     forall u, is_prd_spec_ind u (Is_nothing). *)
+    Inductive is_prd_spec_ind iTy : T iTy ->  @discr (nelist (T iTy)) -> Prop :=
+    | is_prd_spec_op :
+      forall j l, j = i -> is_prd_spec_ind (prd j l) (Is_op l)
+    | is_prd_spec_unit :
+      forall j, is_unit j = true ->  is_prd_spec_ind (unit iTy j) (Is_unit j)
+    | is_prd_spec_nothing :
+      forall u, is_prd_spec_ind u (Is_nothing).
    
-  (*   Lemma is_prd_spec u : is_prd_spec_ind u (is_prd i is_unit u). *)
-  (*   Proof. *)
-  (*     unfold is_prd; case u; intros; try constructor. *)
-  (*     case (eq_idx_spec); intros; subst;  try constructor; auto. *)
-  (*     case_eq (is_unit p); intros; try constructor; auto.   *)
-  (*   Qed. *)
+    Lemma is_prd_spec (u : T iTy ) : is_prd_spec_ind u (is_prd i is_unit u).
+    Proof.
+      unfold is_prd; destruct u; intros; try constructor.
+      -case (eq_idx_spec); intros; subst;  try constructor; auto.
+      -case_eq (is_unit j); intros; try constructor; auto.
+    Qed.
 
-  (*   Lemma prd'_prd : forall (l: nelist T), eval (prd' i l) == eval (prd i l). *)
-  (*   Proof. *)
-  (*     intros  [?|? [|? ?]]; simpl; reflexivity. *)
-  (*   Qed. *)
+    Lemma prd'_prd : forall (l: nelist (T iTy)), eval (prd' i l) = eval (prd i l).
+    Proof.
+      intros  [?|? [|? ?]]; simpl; reflexivity.
+    Qed.
    
    
-  (*   Lemma eval_prd_nil x:  eval (prd i (nil x)) == eval x.  *)
-  (*   Proof. *)
-  (*     rewrite <- prd'_prd. simpl. reflexivity. *)
-  (*   Qed. *)
-  (*   Lemma eval_prd_cons a : forall (l: nelist T), eval (prd i (a::l)) == @Bin.value _ _ (e_bin i) (eval a) (eval (prd i l)). *)
-  (*   Proof. *)
-  (*     intros  [|b l]; simpl; reflexivity. *)
-  (*   Qed.        *)
-  (*   Lemma eval_prd_app : forall (h k: nelist T), eval (prd i (h++k)) == @Bin.value _ _ (e_bin i) (eval (prd i h)) (eval (prd i k)). *)
-  (*   Proof. *)
-  (*     induction h; intro k. simpl; try reflexivity. *)
-  (*     simpl appne.  rewrite  2 eval_prd_cons, IHh, law_assoc. reflexivity. *)
-  (*   Qed.        *)
+    Lemma eval_prd_nil (x: T iTy):  eval (prd i (nilne x)) = eval x.
+    Proof.
+      rewrite <- prd'_prd. simpl. reflexivity.
+    Qed.
+    Lemma eval_prd_cons a : forall (l: nelist (T iTy)), eval (prd i (a:::l)) = bin_value (e_bin iTy i) (eval a) (eval (prd i l)).
+    Proof.
+      intros  [|b l]; simpl; reflexivity.
+    Qed.
+    Lemma eval_prd_app : forall (h k: nelist (T iTy)), eval (prd i (appne h k)) = bin_value (e_bin iTy i) (eval (prd i h)) (eval (prd i k)).
+    Proof.
+      induction h; intro k. simpl; try reflexivity.
+      simpl appne.  rewrite  2 eval_prd_cons, IHh, law_assoc. reflexivity.
+    Qed.
 
-  (*   Inductive compat_prd_unit : @m idx (nelist T) -> Prop := *)
-  (*   | cpu_left : forall x,  is_unit  x = true -> compat_prd_unit  (left x) *)
-  (*   | cpu_right : forall m, compat_prd_unit (right m) *)
-  (*   . *)
+    Inductive compat_prd_unit : @m idx (nelist (T iTy)) -> Prop :=
+    | cpu_left : forall x,  is_unit  x = true -> compat_prd_unit  (left x)
+    | cpu_right : forall m, compat_prd_unit (right m)
+    .
  
-  (*   Lemma compat_prd_unit_return  x: compat_prd_unit (return_prd i is_unit x). *)
-  (*   Proof. *)
-  (*     unfold return_prd. *)
-  (*     case (is_prd_spec); intros; try constructor; auto. *)
-  (*   Qed. *)
+    Lemma compat_prd_unit_return  x: compat_prd_unit (return_prd i is_unit x).
+    Proof.
+      unfold return_prd.
+      case (is_prd_spec); intros; try constructor; auto.
+    Qed.
 
-  (*   Lemma compat_prd_unit_add  : forall x  h, *)
-  (*     compat_prd_unit  h *)
-  (*     -> *)
-  (*     compat_prd_unit *)
-  (*     (add_to_prd i is_unit x *)
-  (*       h). *)
-  (*   Proof. *)
-  (*     intros. *)
-  (*     unfold add_to_prd. *)
-  (*     unfold comp. *)
-  (*     case (is_prd_spec); intros; try constructor; auto. *)
-  (*     unfold comp; case h; try constructor. *)
-  (*     unfold comp; case h; try constructor. *)
-  (*   Qed. *)
+    Lemma compat_prd_unit_add  : forall x  h,
+      compat_prd_unit  h
+      ->
+      compat_prd_unit
+      (add_to_prd i is_unit x
+        h).
+    Proof.
+      intros.
+      unfold add_to_prd.
+      unfold comp.
+      case (is_prd_spec); intros; try constructor; auto.
+      unfold comp; case h; try constructor.
+      unfold comp; case h; try constructor.
+    Qed.
 
    
-  (*   Instance compat_prd_Unit : forall p, compat_prd_unit (left p) -> *)
-  (*     @Unit X R (Bin.value (e_bin i)) (eval (unit p)). *)
-  (*   Proof. *)
-  (*     intros. *)
-  (*     inversion H; subst. apply is_unit_prd_Unit. assumption. *)
-  (*   Qed. *)
+    Instance compat_prd_Unit : forall p, compat_prd_unit (left p) ->
+      @Unit _ eq (bin_value (e_bin iTy i)) (eval (unit iTy p)).
+    Proof.
+      intros.
+      inversion H; subst. apply is_unit_prd_Unit. assumption.
+    Qed.
 
-  (*   Lemma z0' : forall l (r: @m idx (nelist T)), compat_prd_unit r -> *)
-  (*     eval (prd i (run_list (comp (@appne T) l r))) == eval (prd i ((appne (l) (run_list r)))). *)
-  (*   Proof. *)
-  (*     intros. *)
-  (*     unfold comp. unfold run_list. case_eq r; intros; auto; subst. *)
-  (*     rewrite eval_prd_app. *)
-  (*     rewrite eval_prd_nil. *)
-  (*     apply compat_prd_Unit in H. rewrite law_neutral_right. reflexivity. *)
-  (*     reflexivity. *)
-  (*   Qed. *)
+    Lemma z0' : forall l (r: @m idx (nelist (T iTy))), compat_prd_unit r ->
+      eval (prd i (run_list (comp (@appne _) l r))) = eval (prd i ((appne (l) (run_list r)))).
+    Proof.
+      intros.
+      unfold comp. unfold run_list. case_eq r; intros; auto; subst.
+      rewrite eval_prd_app.
+      rewrite eval_prd_nil.
+      apply compat_prd_Unit in H. rewrite law_neutral_right. reflexivity.
+    Qed.
  
-  (*   Lemma z1' a :  eval (prd i (run_list (return_prd i is_unit a))) ==  eval (prd i (nil a)). *)
-  (*   Proof. *)
-  (*     intros. unfold return_prd.  unfold run_list. *)
-  (*     case (is_prd_spec); intros; subst; reflexivity. *)
-  (*   Qed. *)
-  (*   Lemma z2' : forall  u  x, compat_prd_unit  x ->  *)
-  (*     eval (prd i ( run_list *)
-  (*       (add_to_prd i is_unit u x))) ==  @Bin.value _ _ (e_bin i) (eval u) (eval (prd i (run_list x))). *)
-  (*   Proof. *)
-  (*     intros u x Hix. *)
-  (*     unfold add_to_prd. *)
-  (*     case (is_prd_spec); intros; subst. *)
-  (*     rewrite z0' by auto.  rewrite eval_prd_app.  reflexivity. *)
-  (*     apply is_unit_prd_Unit in H. rewrite law_neutral_left. reflexivity. *)
-  (*     rewrite z0' by auto.  rewrite eval_prd_app. reflexivity. *)
-  (*   Qed. *)
+    Lemma z1' (a:T iTy) :  eval (prd i (run_list (return_prd i is_unit a))) =  eval (prd i (nilne a)).
+    Proof.
+      intros. unfold return_prd.  unfold run_list.
+      case (is_prd_spec); intros; subst; reflexivity.
+    Qed.
+    Lemma z2' : forall  u  x, compat_prd_unit  x ->
+      eval (prd i ( run_list
+        (add_to_prd i is_unit u x))) =  bin_value (e_bin iTy i) (eval u) (eval (prd i (run_list x))).
+    Proof.
+      intros u x Hix.
+      unfold add_to_prd.
+      case (is_prd_spec); intros; subst.
+      rewrite z0' by auto.  rewrite eval_prd_app.  reflexivity.
+      apply is_unit_prd_Unit in H. rewrite law_neutral_left. reflexivity.
+      rewrite z0' by auto.  rewrite eval_prd_app. reflexivity.
+    Qed.
  
-  (* End prd_correctness. *)
+  End prd_correctness.
 
 
 
 
-  (* Lemma eval_norm_lists i (Hnorm: forall u, eval (norm u) = eval u) : forall h, eval (prd i (norm_lists norm i h)) = eval (prd i h). *)
-  (* Proof. *)
-  (*   unfold norm_lists. *)
-  (*   assert (H :  forall h : nelist T, *)
-  (*     eval (prd i (run_list (norm_lists_ i (is_unit_of i) norm h))) == *)
-  (*     eval (prd i h) *)
-  (*     /\ compat_prd_unit (is_unit_of i) (norm_lists_ i (is_unit_of i) norm h)). *)
-  
-   
-  (*     induction h as [a | a h [IHh IHh']]; simpl norm_lists_; split. *)
-  (*     rewrite z1'. simpl.  apply Hnorm. *)
-   
-  (*     apply compat_prd_unit_return. *)
-   
-  (*     rewrite z2'. rewrite IHh.  rewrite eval_prd_cons.  rewrite Hnorm. reflexivity. apply is_unit_of_Unit. *)
-  (*     auto. *)
-
-  (*     apply compat_prd_unit_add. auto. *)
-  (*     apply H. *)
-  (*   Defined. *)
+  Lemma eval_norm_lists iTy i (Hnorm: forall (u : T iTy), eval (norm u) = eval u) : forall h : (nelist (T iTy)), eval (prd i (norm_lists norm i h)) = eval (prd i h).
+  Proof.
+    unfold norm_lists.
+    assert (H :  forall h : nelist (T iTy),
+      eval (prd i (run_list (norm_lists_ i (is_unit_of iTy i) norm h))) =
+      eval (prd i h)
+      /\ compat_prd_unit (is_unit_of iTy i) (norm_lists_ i (is_unit_of iTy i) norm h)).
+    {
+      induction h as [a | a h [IHh IHh']]; simpl norm_lists_; split.
+      -rewrite z1'. 2:now eauto. simpl.  apply Hnorm.
+      -apply compat_prd_unit_return. now eauto. 
+      -rewrite z2'. 2,3:now eauto. rewrite IHh.  rewrite eval_prd_cons.  rewrite Hnorm. reflexivity.
+      -apply compat_prd_unit_add. all:auto.
+    }
+    apply H.
+    Defined.
 
   (** correctness of the normalisation function *)
 
@@ -711,13 +710,13 @@ Module ReifH.
     with eval_norm_aux: forall arTy ret (l: vT arTy) (f: type_of_ar arTy ret),
       eval_aux (vnorm l) f = eval_aux l f.
   Proof.
-    induction u as [ iTy p m (*| iTY p l*) | iTy ? | iTy ?];  cbn [norm].
+    induction u as [ iTy p m | iTY p l | iTy ? | iTy ?];  cbn [norm].
     -case_eq (is_commutative iTy p); intros.
      +rewrite sum'_sum.
       apply eval_norm_msets; auto.
      +reflexivity.
-    (*-rewrite prd'_prd.
-    apply eval_norm_lists; auto.*)
+    -rewrite prd'_prd.
+    apply eval_norm_lists; auto.
     -apply eval_norm_aux.
     -reflexivity.
     -induction l; cbn; intros f.
