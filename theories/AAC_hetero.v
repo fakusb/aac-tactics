@@ -141,14 +141,16 @@ Module ReifH.
       end A.
 
     Section fold_map_vA.
+      Variable Cat : idC. 
       Variable F : idC -> idx -> idx -> Type.
-      Variable ret : forall Cat A B, T Cat A B -> F Cat A B.
-      Variable bind : forall Cat A B C, T Cat B C -> F Cat A B -> F Cat A C.
-      Fixpoint fold_map_vA {Cat A B} (l : vAT Cat A B) : F Cat A B :=
-        match l with
-        | vAnil x => ret x
-        | @vAcons Cat A B C u l =>  bind u (fold_map_vA l)
-        end.
+      Variable ret : forall A B, T Cat A B -> F Cat A B.
+      Variable bind : forall A B C, T Cat B C -> F Cat A B -> F Cat A C.
+      Program Fixpoint fold_map_vA {A B} (l : vAT Cat A B) : F Cat A B :=
+        match l in vAT Cat' A' B' return (Cat',A',B') = (Cat,A,B) ->F Cat A B with
+        | vAnil x => fun H => ret x
+        | vAcons u l => fun H => bind u (fold_map_vA l)
+        end eq_refl.
+
     End fold_map_vA.
     
 
@@ -205,60 +207,61 @@ Module ReifH.
 
     (** we need to show that compare reflects equality (this is because
      we work with msets rather than lists with arities) *)
-    Lemma tcompare_weak_spec: forall Cat A B (u v : T Cat A B), compare_weak_spec u v (compare u v)
-    with vAtcompare_weak_spec: forall Cat A B (u v : vAT Cat A B), compare_weak_spec u v (vAcompare u v)
-    with vcompare_reflect_eqdep: forall ar us ar' vs (H: ar=ar'), vcompare us vs = Eq -> cast vT H us = vs.
+    Lemma tcompare_weak_spec Cat A B (u v : T Cat A B): compare_weak_spec u v (compare u v)
+    with vAtcompare_weak_spec Cat A B (u v : vAT Cat A B): compare_weak_spec u v (vAcompare u v)
+    with vcompare_reflect_eqdep ar us ar' vs (H: ar=ar'): vcompare us vs = Eq -> cast vT H us = vs.
+    
     Proof.
-      -intros Cat A B [].
-       +intros v. refine (match v as v' in T Cat' A' B' return forall H : Cat' A' B' = _,
-                   compare_weak_spec _ (cast _ H v') (compare _ v') with
-               | sum _ _ => _
-               | _ => _
+      -destruct u. 
+       +refine (match v as v' in T Cat' A' B' return forall H : (Cat',A',B') = _,
+                    compare_weak_spec _ (eq_rect (Cat',A',B') (fun '(Cat,A,B) => T Cat A B) v' _ H) (compare _ v') with
+                | sum _ _ => _
+                | _ => _
                           end eq_refl). all:intros H;try constructor.
         inversion H;subst. cbn. rewrite cast_eq. 2:trivial. 
         case (pos_compare_weak_spec i p0); intros; try constructor.
-        case (mset_compare_weak_spec compare (tcompare_weak_spec _) m m0); intros; try constructor.
-       +intros v0. refine (match v0 as v' in T Cat' A' B' return forall H : Cat' A' B' = _,
-                   compare_weak_spec _ (cast _ H v') (compare _ v') with
-               | sum _ _ => _
-               | _ => _
+        case (mset_compare_weak_spec compare (tcompare_weak_spec _ _ _) m m0); intros; try constructor.
+       +refine (match v as v' in T Cat' A' B' return forall H : (Cat',A',B') = _,
+                    compare_weak_spec _ (eq_rect (Cat',A',B') (fun '(Cat,A,B) => T Cat A B) v' _ H) (compare _ v') with
+                | sum _ _ => _
+                | _ => _
                           end eq_refl). all:intros H;try constructor.
-        inversion H;subst. cbn.  
-        case (pos_compare_weak_spec p p1); intros; try constructor.
-        case (vAtcompare_weak_spec _ v v1);intros;try constructor.  
-       +intros v0. refine (match v0 as v' in T Cat' A' B' return forall H : Cat' A' B' = _,
-                   compare_weak_spec _ (cast _ H v') (compare _ v') with
-               | sum _ _ => _
-               | _ => _
+        inversion H;subst. cbn. rewrite cast_eq. 2:trivial. 
+        case (pos_compare_weak_spec p p2); intros; try constructor.
+        case (vAtcompare_weak_spec _ _ _ v0 v1);intros;try constructor.  
+       +refine (match v as v' in T Cat' A' B' return forall H : (Cat',A',B') = _,
+                    compare_weak_spec _ (eq_rect (Cat',A',B') (fun '(Cat,A,B) => T Cat A B) v' _ H) (compare _ v') with
+                | sum _ _ => _
+                | _ => _
                           end eq_refl). all:intros H;try constructor.
-        inversion H;subst. cbn.  
-        destruct (pos_compare_weak_spec i p0); intros; try constructor.   
-        case_eq (vcompare v v1); intro Hv; try constructor.
+        inversion H;subst. cbn. rewrite cast_eq. 2:trivial. 
+        destruct (pos_compare_weak_spec i p1); intros; try constructor.   
+        case_eq (vcompare v0 v1); intro Hv; try constructor.
         rewrite <- (vcompare_reflect_eqdep _ _ _ _ eq_refl Hv). cbn. constructor.
-       +intros v0. refine (match v0 as v' in T Cat' A' B' return forall H : Cat' A' B' = _,
-                   compare_weak_spec _ (cast _ H v') (compare _ v') with
-               | sum _ _ => _
-               | _ => _
+       +refine (match v as v' in T Cat' A' B' return forall H : (Cat',A',B') = _,
+                    compare_weak_spec _ (eq_rect (Cat',A',B') (fun '(Cat,A,B) => T Cat A B) v' _ H) (compare _ v') with
+                | sum _ _ => _
+                | _ => _
                           end eq_refl). all:intros H;try constructor.
-        inversion H;subst. rewrite cast_eq. 2:trivial. cbn.
+        inversion H;subst. cbn. rewrite cast_eq. 2:trivial. 
         case (pos_compare_weak_spec j p0); intros; try constructor. 
-      -intros Cat A B [] v0.
-       +destruct v0;intros;try constructor. cbn.
-        case (tcompare_weak_spec _ t t0). all:intros;constructor.
-       +refine (match v0 as v0 in vAT Cat' A' B' return forall H : Cat' A' B' = _,
-                   compare_weak_spec _ (cast (fun Cat A B => vAT Cat A B) H v0) (vAcompare _ v0) with
-               | vAnil _ => _
-               | _ => _
-                          end eq_refl). all:intros H;try constructor. 
-        inversion H;subst. cbn. rewrite cast_eq. 2:trivial. revert v1.
+      -destruct u.
+       +destruct v;intros;try constructor. cbn.
+        case (tcompare_weak_spec _ _ _ t t0). all:intros;constructor.
+       +refine (match v as v' in vAT Cat' A' B' return forall H : (Cat',A',B') = _,
+                    compare_weak_spec _ (eq_rect (Cat',A',B') (fun '(Cat,A,B) => vAT Cat A B) v' _ H) (vAcompare _ v') with
+                | vAcons _ _ => _
+                | _ => _
+                          end eq_refl). all:intros H;try constructor.
+        inversion H;subst. cbn. rewrite cast_eq. 2:trivial.  revert v.
         revert dependent B. intros B.
         revert dependent p0. intros p0. case_eq (pos_compare_weak_spec B p0);intros;try constructor. 
-        case (tcompare_weak_spec _ t t0);intros;try constructor.
-        case (vAtcompare_weak_spec _ v v1);intros;constructor. 
-      -induction us; destruct vs; simpl; intros H Huv; try discriminate.
+        case (tcompare_weak_spec _ _ _ t t0);intros;try constructor.
+        case (vAtcompare_weak_spec _ _ _ u v0);intros;constructor. 
+      -revert ar' vs H. induction us; destruct vs; simpl; intros H Huv; try discriminate.
        +apply cast_eq, list_eq_dec, idT_eq_dec.
        +inversion H. subst.
-        revert Huv. case (tcompare_weak_spec _ t t0). 2,3:easy.
+        revert Huv. case (tcompare_weak_spec _ _ _ t t0). 2,3:easy.
         intro. intros H'. apply IHus with (H:=eq_refl) in H'. cbn in H'. subst.
         apply cast_eq,list_eq_dec,idT_eq_dec. 
     Qed.
@@ -282,10 +285,10 @@ Module ReifH.
 
   (** ** Normalisation *)
 
-  Inductive discr {A}: idT -> Type :=
-  | Is_op Cat A B (m: A): discr Cat A B
-  | Is_unit Cat A: idx -> discr (Cat,(A,A))
-  | Is_nothing Cat A B: discr Cat A B.
+  Inductive discr {X} : idC -> idx -> idx -> Type :=
+  | Is_op {Cat A B} (m: X): discr Cat A B
+  | Is_unit {Cat A}: idx -> discr Cat A A
+  | Is_nothing {Cat A B}: discr Cat A B.
  
   (* This is called sum in the std lib *)
 
@@ -299,45 +302,41 @@ Module ReifH.
   (** auxiliary functions, to clean up sums  *)
 
   Section sums.
+    Variable Cat : idC.
+    Variable A : idx. (* (Cat,A,A) is the homset of the sum*)
     Variable i : idx. (* index of binary function to normalise *)
     Variable is_unit : idx -> bool.
 
 
-    Definition sum' {Cat A} (u : mset (T (Cat,(A,A)))) : T (Cat,(A,A)) :=
+    Definition sum' (u : mset (T Cat A A)) : T Cat A A :=
       match u with
       | nilne (u,xH) => u
       | _ => sum i u
       end.
 
-    Definition is_sum {Cat A B} (u: T Cat A B) : discr Cat A B :=
-    match u in T Cat A B return discr Cat A B with
-      | sum Cat A j l => if eq_idx_bool j i then Is_op _ l else Is_nothing _ 
-      | unit Cat A j => if is_unit j then Is_unit Cat A j else Is_nothing _
-      | u => Is_nothing _
+    Definition is_sum (u: T Cat A A) : discr Cat A A :=
+    match u with
+      | sum j l => if eq_idx_bool j i then Is_op l else Is_nothing 
+      | unit j => if is_unit j then Is_unit j else Is_nothing
+      | u => Is_nothing
     end.
-
-    Definition copy_mset {Cat A B} n (l: mset (T Cat A B)): mset (T Cat A B) :=
-      match n with
-        | xH => l
-        | _ => nelist_map (fun vm => let '(v,m):=vm in (v,Pmult n m)) l
-      end.
    
-    Program Definition return_sum {Cat} {i1} u n : idx + mset (T (Cat,(i1,i1))):=
+    Program Definition return_sum  u n : idx + mset (T Cat A A):=
       match is_sum u with
-        | Is_nothing _ => inr (nilne (u,n))
-        | Is_op _ l' =>  inr (copy_mset n l')
+        | Is_nothing => inr (nilne (u,n))
+        | Is_op l' =>  inr (copy_mset n l')
         | Is_unit j => inl j
       end.
    
-    Definition add_to_sum {Cat i1} u n (l : idx + (mset (T (Cat,(i1,i1)))))  :=
+    Definition add_to_sum u n (l : idx + (mset (T Cat A A)))  :=
       match is_sum  u with
-        | Is_nothing _ => comp (merge_msets compare) (nilne (u,n)) l
-        | Is_op _ l' => comp (merge_msets compare) (copy_mset n l') l
+        | Is_nothing => comp (merge_msets compare) (nilne (u,n)) l
+        | Is_op l' => comp (merge_msets compare) (copy_mset n l') l
         | Is_unit _ => l
     end.
 
 
-    Definition norm_msets_ {Cat} {i1} norm (l: mset (T (Cat,(i1,i1)))) : idx + mset (T(Cat,(i1,i1))):=
+    Definition norm_msets_ norm (l: mset (T Cat A A)) : idx + mset (T Cat A A):=
     fold_map'
     (fun un => let '(u,n) := un in  return_sum  (norm u) n)
     (fun un l => let '(u,n) := un in  add_to_sum  (norm u) n l) l.
@@ -348,92 +347,86 @@ Module ReifH.
   (** similar functions for products *)
 
   Section prds.
+    Variable Cat : idC. 
     Variable i : idx.
     Variable is_unit : idx -> bool.
     
-    Definition prd' {Cat A B} (u: vAT Cat A B): T Cat A B :=
+    Definition prd' {A B} (u: vAT Cat A B): T Cat A B :=
     match u with
       | vAnil u => u
-      | vAcons_ _ _ _ as u => prd i u
+      | vAcons _ _ as u => prd i u
     end.
 
-    Definition is_prd {Cat A B} (u: T Cat A B) : discr Cat A B :=
+    Definition is_prd {A B} (u: T Cat A B) : discr Cat A B :=
     match u in T Cat A B return discr Cat A B with
-      | prd Cat A B j l => if eq_idx_bool j i then Is_op _ l else Is_nothing _
-      | unit j => if is_unit j  then Is_unit j else Is_nothing _
-      | u => Is_nothing _
+      | prd j l => if eq_idx_bool j i then Is_op l else Is_nothing
+      | unit j => if is_unit j  then Is_unit j else Is_nothing
+      | u => Is_nothing
     end.
  
-   
-    Program Definition return_prd {Cat} {i1 i2} (u:T (Cat,(i1,i2))) : (idx * (i1=i2)) + vAT (Cat,(i1,i2)):=
-      match is_prd u in discr Cat A B return Cat A B = (Cat,(i1,i2)) -> (idx * (i1=i2)) + vAT (Cat,(i1,i2)) with
-        | Is_nothing _ => fun H => inr (vAnil (u))
-        | Is_op _ l' =>  fun H => inr (l')
-        | Is_unit j => fun H => inl (j,_)
-      end eq_refl.
+    Definition return_prd {A B} (u:T Cat A B) : (idx * (A=B)) + vAT Cat A B:=
+      match is_prd u with
+        | Is_nothing => inr (vAnil (u))
+        | Is_op l' =>  inr (l')
+        | Is_unit j =>inl (j,eq_refl)
+      end.
 
-    Definition comp' {arr} {i1 i2 i3 : idx} {C D} (merge : arr i2 i3 -> arr i1 i2 -> arr i1 i3) (l : arr i2 i3) (l' : (D * (i1 = i2)) + arr i1 i2) : C + arr i1 i3 :=
+    Definition comp' {arr} {A B C : idx} {X Y} (merge : arr B C -> arr A B -> arr A C) (l : arr B C) (l' : (X * (A = B)) + arr A B) : Y + arr A C :=
       match l' with
-      | inl (_,H) => inr (cast (fun i => arr i i3) (eq_sym H) l)
+      | inl (_,H) => inr (cast (fun i => arr i C) (eq_sym H) l)
       | inr l' => inr (merge l l')
       end.
    
-    Program Definition add_to_prd {Cat A B C} (u: T Cat B C):=
-      match is_prd u in @discr _ Cat A B return
-            forall (H:Cat A B = Cat B C) A,
+    Program Definition add_to_prd {A B C} (u: T Cat B C):=
+      match is_prd u in discr Cat' B' C' return
+            forall (H:(Cat',B',C')=(Cat,B,C)) A,
               (idx * (A = B)) + (vAT Cat A B) -> (idx * (A = C)) + (vAT Cat A C) with
-        | Is_nothing _=> fun H A l => comp' (arr:= fun i1 i2 => vAT (Cat,(i1,i2))) vAapp (vAnil u) l
-        | Is_op Cat A B''' l' => fun H A l => comp' (arr:= fun i1 i2 => vAT (Cat,(i1,i2))) vAapp l' l
-        | Is_unit _  => fun H A l => (cast (fun i : idx => (_ + vAT (Cat,(A,i)))%type) _ l)
-      end eq_refl A.
-
+        | Is_nothing=> fun H A l => comp' (arr:=vAT Cat) vAapp (vAnil u) l
+        | Is_op l' => fun H A l => comp' (arr:= vAT Cat) vAapp l' l
+        | Is_unit _  => fun H A l => cast (fun X => _ + vAT Cat A X)%type _ l
+      end eq_refl A.    
     
-    
-    Definition norm_lists_ {Cat i1 i2} (norm: forall Cat A B, T Cat A B -> T Cat A B) (l : vAT (Cat,(i1,i2))) :=
-      fold_map_vA (fun Cat A B => match Cat A B with
-                             (Cat,(i1,i2))  => _ + _ end)%type
-                  (fun Cat' A' B' => match Cat' A' B' with
-                             (jCat,(j1,j2)) => 
-                             fun (u: T (jCat,(j1,j2))) => return_prd (norm _ u)
-                           end)
-                  (fun Cat i1 i2 i3 u l => add_to_prd (norm _ u) l) l.
+    Definition norm_lists_ {A B} (norm: forall A B, T Cat A B -> T Cat A B) (l : vAT Cat A B) :=
+      fold_map_vA (fun Cat A B => _ + _ )%type
+                  (fun A B (u: T Cat A B) => return_prd (norm _ _ u))
+                  (fun A B C u l => add_to_prd (norm _ _ u) l) l.
 
 
   End prds.
 
 
-  Definition run_list {Cat} {i1 i2} (x: _ + vAT (Cat,(i1,i2))) :=
+  Definition run_list {Cat} {A B} (x: _ + vAT Cat A B) :=
     match x with
-    | inl (n,H) => vAnil (cast (fun j => T (Cat,(i1,j))) H (unit Cat i1 n))
+    | inl (n,H) => vAnil (cast (fun X => T Cat A X) H (unit n))
     | inr l => l
     end.
  
-  Definition norm_lists {Cat} {i1 i2} (norm: forall Cat A B, T Cat A B -> T Cat A B ) i (l: vAT (Cat,(i1,i2))) :=
+  Definition norm_lists {Cat} {A B} (norm: forall A B, T Cat A B -> T Cat A B ) i (l: vAT Cat A B) :=
     let is_unit := is_unit_of Cat i in
       run_list (norm_lists_ i is_unit norm l).
 
 (* TODO: does this make sens? *)
   
-  Definition run_msets {Cat} {i1} (x : (idx) + _) := match x with
-                        | inl (n,H) => nilne (cast (fun i => T (Cat,(i1,i))) H (unit Cat i1 n), xH)
+  Definition run_msets {Cat} {A} (x : idx + _) : mset (T Cat A A):= match x with
+                        | inl n => nilne (unit n, xH)
                         | inr l => l
                       end.
  
-  Definition norm_msets {Cat} {i1} (norm: T (Cat,(i1,i1)) -> T _) i l :=
+  Definition norm_msets {Cat} {A} (norm: T Cat A A -> T Cat A A) i l :=
     let is_unit := is_unit_of Cat i in
       run_msets (norm_msets_ i is_unit norm l).
  
-  Fixpoint norm {Cat A B} (u:T Cat A B) {struct u} : T Cat A B:=
+   Fixpoint norm {Cat A B} (u:T Cat A B) {struct u} : T Cat A B:=
     match u with
-      | sum Cat A B i l as u => if is_commutative Cat A B i then sum' i (norm_msets norm i l) else u
-      | prd Cat A B i l => prd' i (norm_lists norm i l)
-      | sym Cat A B i l => sym Cat A B i (vnorm l)
-      | unit Cat A B i as u => u
+      | sum i l as u => if is_commutative Cat i then sum' i (norm_msets norm i l) else u
+      | prd i l => prd' i (norm_lists (@norm _) i l)
+      | sym i l => sym i (vnorm l)
+      | unit i as u => u
     end
-  with vnorm i (l: vT i): vT i :=
+  with vnorm {i}(l: vT i): vT i :=
     match l with
       | vnil => vnil
-      | vcons _ _ u l => vcons (norm u) (vnorm l)
+      | vcons u l => vcons (norm u) (vnorm l)
     end.
 
   (** ** Correctness *)

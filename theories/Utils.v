@@ -144,6 +144,12 @@ Notation "x '+++' y" := (appne x y) (at level 60, right associativity).
 (** finite multisets are represented with ordered lists with multiplicities *)
 Definition mset A := nelist (A*positive).
 
+Definition copy_mset {X} n (l: mset X): mset X :=
+  match n with
+  | xH => l
+  | _ => nelist_map (fun vm => let '(v,m):=vm in (v,Pmult n m)) l
+  end.
+
 (** lexicographic composition of comparisons (this is a notation to keep it lazy) *)
 Notation lex e f := (match e with Eq => f | _ => e end).  
 
