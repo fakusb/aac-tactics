@@ -37,7 +37,6 @@ Local Open Scope list_scope.
 
 Set Implicit Arguments.
 
-
 Module ReifH.
   Section ReifH.
     (* We use environments to store the various operators and the
@@ -121,18 +120,26 @@ Module ReifH.
         }.
     Variable e_unit: forall iCat, idx -> unit_pack iCat.
 
+    (** As commutative operators can only take homomorphisms as arguments (arrows from X to X), the reifying type has implicit equality constrains.
+        We decide to make them explicit by using equality, as this makes dependent mathching easier. *)
+    (** The following provides for us not to have to explicitly keep track of the equality constrains, by defining an internal type-class for a copy of eq *)
+    Definition eq' {A} := eq (A:=A). 
+    Definition eq_refl' : forall A (a:A), eq' a a := @eq_refl. 
+    Existing Class eq'.
+    Existing Instance eq_refl'.
+
     Inductive T: idC -> idx -> idx -> Type :=
-    | sum {Cat A} (i : idx): mset (T Cat A A) -> T Cat A A
+    | sum {Cat A B} {Heq : eq' A B} (i : idx): mset (T Cat A B) -> T Cat A B
     | prd {Cat A B}: idx -> vAT Cat A B -> T Cat A B
     | sym {Cat A B} (i : idx):
         vT (sym_args (e_sym (Cat,A,B) i)) -> T Cat A B
-    | unit {Cat} {A} (j:idx): T Cat A A
+    | unit {Cat} {A B} {Heq : eq' A B}(j:idx): T Cat A B
     with vT: list idT -> Type :=
          | vnil: vT nil
          | vcons {Cat A B} ar: T Cat A B -> vT ar -> vT ((Cat,A,B)::ar)
     with vAT: idC -> idx -> idx -> Type := (* nonempty vector of arrows whose objects match at the border, for assoc *)
          | vAnil {Cat A B} : T Cat A B -> vAT Cat A B
-         | vAcons {Cat A B C} : T Cat B C -> vAT Cat A B -> vAT Cat A C.
+         | vAcons {Cat A B C} : T Cat B C -> vAT Cat A B -> vAT Cat A C.      
 
     Fixpoint vAapp {Cat A B C} (l: vAT Cat B C) : vAT Cat A B -> vAT Cat A C :=
       match l with
@@ -146,7 +153,7 @@ Module ReifH.
       Variable ret : forall A B, T Cat A B -> F Cat A B.
       Variable bind : forall A B C, T Cat B C -> F Cat A B -> F Cat A C.
       Program Fixpoint fold_map_vA {A B} (l : vAT Cat A B) : F Cat A B :=
-        match l in vAT Cat' A' B' return (Cat',A',B') = (Cat,A,B) ->F Cat A B with
+        match l in vAT Cat' A' B' return (Cat',A',B') = (Cat,A,B) -> F Cat A B with
         | vAnil x => fun H => ret x
         | vAcons u l => fun H => bind u (fold_map_vA l)
         end eq_refl.
@@ -188,11 +195,11 @@ Module ReifH.
 
     Fixpoint eval {Cat A B} (u : T Cat A B) : (e_type (Cat,A,B)) :=
       match u with
-      | @sum Cat A iBin l => let o := bin_value (e_bin _ iBin) A A A in
-                  fold_map (fun un => let '(u,n):=un in @copy _ o n (eval u)) o l
+      | @sum Cat A B H iBin l => let o := bin_value (e_bin _ iBin) _ _ _ in
+                  cast (fun X => _) (eq_sym H) (fold_map (fun un => let '(u,n):= cast (fun X => (T Cat X B * idx)%type ) H un in @copy _ o n (eval u)) o l)
       | prd iBin l => vaeval iBin l
       | @sym Cat A B i v => eval_aux v (sym_value (e_sym (Cat,A,B) i))
-      | @unit Cat A i  => u_value (e_unit Cat i) A
+      | @unit Cat A B Heq i  => cast (fun X => _) Heq (u_value (e_unit Cat i) A)
       end
     with eval_aux {ar Cat A B} (v: vT ar): type_of_ar ar (Cat,A,B) -> e_type (Cat,A,B) :=
            match v with
@@ -218,9 +225,10 @@ Module ReifH.
                 | sum _ _ => _
                 | _ => _
                           end eq_refl). all:intros H;try constructor.
-        inversion H;subst. cbn. rewrite cast_eq. 2:trivial. 
-        case (pos_compare_weak_spec i p0); intros; try constructor.
-        case (mset_compare_weak_spec compare (tcompare_weak_spec _ _ _) m m0); intros; try constructor.
+        inversion H;subst. cbn. rewrite cast_eq. 2:trivial.
+        case (Eqdep_dec.UIP_dec Pos.eq_dec Heq e).
+        case (pos_compare_weak_spec i p1); intros; try constructor.
+        case (mset_compare_weak_spec compare (tcompare_weak_spec _ _ _) m m0); intros; try constructor. 
        +refine (match v as v' in T Cat' A' B' return forall H : (Cat',A',B') = _,
                     compare_weak_spec _ (eq_rect (Cat',A',B') (fun '(Cat,A,B) => T Cat A B) v' _ H) (compare _ v') with
                 | sum _ _ => _
@@ -243,8 +251,9 @@ Module ReifH.
                 | sum _ _ => _
                 | _ => _
                           end eq_refl). all:intros H;try constructor.
-        inversion H;subst. cbn. rewrite cast_eq. 2:trivial. 
-        case (pos_compare_weak_spec j p0); intros; try constructor. 
+        inversion H;subst. cbn. rewrite cast_eq. 2:trivial.
+        case (Eqdep_dec.UIP_dec Pos.eq_dec Heq e).
+        case (pos_compare_weak_spec j p1); intros; try constructor. 
       -destruct u.
        +destruct v;intros;try constructor. cbn.
         case (tcompare_weak_spec _ _ _ t t0). all:intros;constructor.
@@ -285,10 +294,11 @@ Module ReifH.
 
   (** ** Normalisation *)
 
-  Inductive discr {X} : idC -> idx -> idx -> Type :=
-  | Is_op {Cat A B} (m: X): discr Cat A B
-  | Is_unit {Cat A}: idx -> discr Cat A A
-  | Is_nothing {Cat A B}: discr Cat A B.
+  Inductive discr {X} {A B: idx} : Type :=
+  | Is_op (m: X): discr
+  | Is_unit {Heq : eq' A B} : idx -> discr
+  | Is_nothing : discr.
+  Arguments discr : clear implicits. 
  
   (* This is called sum in the std lib *)
 
@@ -303,32 +313,32 @@ Module ReifH.
 
   Section sums.
     Variable Cat : idC.
-    Variable A : idx. (* (Cat,A,A) is the homset of the sum*)
+    Variable A B : idx.
+    Context {Heq:eq' A B}. 
     Variable i : idx. (* index of binary function to normalise *)
     Variable is_unit : idx -> bool.
 
-
-    Definition sum' (u : mset (T Cat A A)) : T Cat A A :=
+    Definition sum' (u : mset (T Cat A B)) : T Cat A B :=
       match u with
       | nilne (u,xH) => u
       | _ => sum i u
       end.
 
-    Definition is_sum (u: T Cat A A) : discr Cat A A :=
+    Definition is_sum (u: T Cat A B) : discr (mset(T Cat A B)) A B  :=
     match u with
       | sum j l => if eq_idx_bool j i then Is_op l else Is_nothing 
       | unit j => if is_unit j then Is_unit j else Is_nothing
       | u => Is_nothing
     end.
    
-    Program Definition return_sum  u n : idx + mset (T Cat A A):=
+    Definition return_sum u n : idx + mset (T Cat A B):=
       match is_sum u with
         | Is_nothing => inr (nilne (u,n))
         | Is_op l' =>  inr (copy_mset n l')
         | Is_unit j => inl j
       end.
    
-    Definition add_to_sum u n (l : idx + (mset (T Cat A A)))  :=
+    Definition add_to_sum u n (l : idx + (mset (T Cat A B)))  :=
       match is_sum  u with
         | Is_nothing => comp (merge_msets compare) (nilne (u,n)) l
         | Is_op l' => comp (merge_msets compare) (copy_mset n l') l
@@ -336,18 +346,19 @@ Module ReifH.
     end.
 
 
-    Definition norm_msets_ norm (l: mset (T Cat A A)) : idx + mset (T Cat A A):=
+    Definition norm_msets_ norm (l: mset (T Cat A B)) : idx + mset (T Cat A B):=
     fold_map'
     (fun un => let '(u,n) := un in  return_sum  (norm u) n)
     (fun un l => let '(u,n) := un in  add_to_sum  (norm u) n l) l.
 
 
   End sums.
+  Print sum'. 
  
   (** similar functions for products *)
 
   Section prds.
-    Variable Cat : idC. 
+    Variable Cat : idC.
     Variable i : idx.
     Variable is_unit : idx -> bool.
     
@@ -357,34 +368,33 @@ Module ReifH.
       | vAcons _ _ as u => prd i u
     end.
 
-    Definition is_prd {A B} (u: T Cat A B) : discr Cat A B :=
-    match u in T Cat A B return discr Cat A B with
+    Definition is_prd {A B} (u: T Cat A B) : discr _ A B :=
+    match u with
       | prd j l => if eq_idx_bool j i then Is_op l else Is_nothing
       | unit j => if is_unit j  then Is_unit j else Is_nothing
       | u => Is_nothing
     end.
  
-    Definition return_prd {A B} (u:T Cat A B) : (idx * (A=B)) + vAT Cat A B:=
+    Definition return_prd {A B}(u:T Cat A B) : (idx * eq' A B) + vAT Cat A B:=
       match is_prd u with
         | Is_nothing => inr (vAnil (u))
         | Is_op l' =>  inr (l')
-        | Is_unit j =>inl (j,eq_refl)
+        | Is_unit j =>inl (j,_)
       end.
 
-    Definition comp' {arr} {A B C : idx} {X Y} (merge : arr B C -> arr A B -> arr A C) (l : arr B C) (l' : (X * (A = B)) + arr A B) : Y + arr A C :=
+    Definition comp' {arr X Y} {A B C : idx} (merge : arr B C -> arr A B -> arr A C) (l : arr B C) (l' : (X * (A = B)) + arr A B) : Y + arr A C :=
       match l' with
       | inl (_,H) => inr (cast (fun i => arr i C) (eq_sym H) l)
       | inr l' => inr (merge l l')
       end.
    
-    Program Definition add_to_prd {A B C} (u: T Cat B C):=
-      match is_prd u in discr Cat' B' C' return
-            forall (H:(Cat',B',C')=(Cat,B,C)) A,
-              (idx * (A = B)) + (vAT Cat A B) -> (idx * (A = C)) + (vAT Cat A C) with
-        | Is_nothing=> fun H A l => comp' (arr:=vAT Cat) vAapp (vAnil u) l
-        | Is_op l' => fun H A l => comp' (arr:= vAT Cat) vAapp l' l
-        | Is_unit _  => fun H A l => cast (fun X => _ + vAT Cat A X)%type _ l
-      end eq_refl A.    
+    Definition add_to_prd {A B C} (u: T Cat B C):=
+      match is_prd u return     forall A,
+              (idx * (eq' A B)) + (vAT Cat A B) -> (idx * (A = C)) + (vAT Cat A C) with
+        | Is_nothing=> fun A l => comp' (arr:=vAT Cat) vAapp (vAnil u) l
+        | Is_op l' => fun A l => comp' (arr:= vAT Cat) vAapp l' l
+        | @Is_unit _ _ _ H _  => fun A l => cast (fun X => _ + vAT Cat A X)%type H l
+      end A.    
     
     Definition norm_lists_ {A B} (norm: forall A B, T Cat A B -> T Cat A B) (l : vAT Cat A B) :=
       fold_map_vA (fun Cat A B => _ + _ )%type
@@ -401,18 +411,18 @@ Module ReifH.
     | inr l => l
     end.
  
-  Definition norm_lists {Cat} {A B} (norm: forall A B, T Cat A B -> T Cat A B ) i (l: vAT Cat A B) :=
+  Definition norm_lists {Cat A B} (norm: forall A B, T Cat A B -> T Cat A B ) i (l: vAT Cat A B) :=
     let is_unit := is_unit_of Cat i in
       run_list (norm_lists_ i is_unit norm l).
 
 (* TODO: does this make sens? *)
   
-  Definition run_msets {Cat} {A} (x : idx + _) : mset (T Cat A A):= match x with
+  Definition run_msets {Cat} {A B} {_ : eq' A B} (x : idx + _) : mset (T Cat A B):= match x with
                         | inl n => nilne (unit n, xH)
                         | inr l => l
                       end.
  
-  Definition norm_msets {Cat} {A} (norm: T Cat A A -> T Cat A A) i l :=
+  Definition norm_msets {Cat} {A B} {_:eq' A B} (norm: T Cat A B -> T Cat A B) i l :=
     let is_unit := is_unit_of Cat i in
       run_msets (norm_msets_ i is_unit norm l).
  
@@ -431,8 +441,8 @@ Module ReifH.
 
   (** ** Correctness *)
 
-  Lemma is_unit_of_Unit  : forall Cat A B (i j : idx),
-   is_unit_of Cat A B i j = true -> Unit (@eq (e_type Cat A B)) (bin_value (e_bin Cat A B i)) (eval (unit Cat A B j)).
+  Lemma is_unit_of_Unit  : forall Cat (i j : idx),
+   is_unit_of Cat i j = true -> HUnit (fun _ _ => eq) (bin_value (e_bin Cat i)) (fun A => eval (unit j)).
   Proof.
     intros. unfold is_unit_of in H.
     rewrite existsb_exists in H.
@@ -441,14 +451,14 @@ Module ReifH.
     simpl. destruct x. simpl. auto.
   Qed.
  
-  Instance Binvalue_Commutative Cat A B i (H : is_commutative Cat A B i = true) : Commutative eq (bin_value (e_bin Cat A B i) ).
+  Instance Binvalue_Commutative Cat i (H : is_commutative Cat i = true) : HCommutative (fun _ _ => eq) (bin_value (e_bin Cat i) ).
   Proof.
     unfold is_commutative in H.
     destruct bin_comm; auto.
     discriminate.
   Qed.
 
-  Instance Binvalue_Associative Cat A B i :Associative eq (bin_value (e_bin Cat A B i) ).
+  Instance Binvalue_Associative Cat  i: HAssociative (fun _ _ => eq) (bin_value (e_bin Cat i) ).
   Proof.
     destruct e_bin; auto.
   Qed.
@@ -464,102 +474,114 @@ Module ReifH.
 
   Hint Resolve is_unit_of_Unit.
   Section sum_correctness.
-    Variable Cat A B : idT.
+    Variable Cat : idC. 
     Variable i : idx. (* The binary operator of the sum*)
     Variable is_unit : idx -> bool.
-    Hypothesis is_unit_sum_Unit : forall j, is_unit j = true -> @Unit _ eq (bin_value (e_bin Cat A B i)) (eval (unit Cat A B j)).
+    Hypothesis is_unit_sum_Unit : forall j, is_unit j = true -> HUnit (fun _ _ => eq) (bin_value (e_bin Cat i)) (fun A => eval (unit j)).
 
-    Inductive is_sum_spec_ind Cat A B: T Cat A B -> @discr (mset (T Cat A B)) -> Prop :=
-    | is_sum_spec_op : forall j l, j = i -> is_sum_spec_ind (sum j l) (Is_op l)
-    | is_sum_spec_unit : forall j, is_unit j = true ->  is_sum_spec_ind (unit Cat A B j) (Is_unit j)
-    | is_sum_spec_nothing : forall u, is_sum_spec_ind u (Is_nothing).
+    Inductive is_sum_spec_ind Cat' A B: T Cat' A B -> discr (mset (T Cat' A B)) A B -> Prop :=
+    | is_sum_spec_op j {Heq : eq' A B} (l: mset (T Cat' A B)): j = i -> is_sum_spec_ind (sum j l) (Is_op l)
+    | is_sum_spec_unit j {Heq : eq' A B}: is_unit j = true ->  is_sum_spec_ind (unit j) (Is_unit j)
+    | is_sum_spec_nothing (u: T Cat' A B) : is_sum_spec_ind u (Is_nothing).
  
-    Lemma is_sum_spec (u:T Cat A B) : is_sum_spec_ind u (is_sum i is_unit u).
+    Lemma is_sum_spec {A B} {Heq : eq' A B} (u:T Cat A B): is_sum_spec_ind u (is_sum i is_unit u).
     Proof.
-      unfold is_sum; destruct u; intros; try constructor.
+      unfold is_sum. destruct u; intros; try constructor.
       -destruct eq_idx_bool eqn:eq1. 2: now constructor.
-      revert eq1. case eq_idx_spec; try discriminate. intros. now  constructor.
+      revert eq1. case eq_idx_spec; try discriminate. intros. now constructor.
       -case_eq (is_unit j); intros; try constructor. auto.
     Qed.
 
-    Instance assoc :   @Associative _ eq (bin_value (e_bin Cat A B i)).
+    Instance assoc: HAssociative (fun _ _ => eq) (bin_value (e_bin Cat i)).
     Proof.
-      destruct (e_bin Cat A B i). simpl. assumption.
+      destruct (e_bin Cat i). simpl. assumption.
     Qed.
     (*Instance proper :   Proper (R ==> R ==> R) (Bin.value (e_bin i)).
     Proof.
       destruct (e_bin i). simpl. assumption.
     Qed.*)
-    Hypothesis comm : @Commutative _ eq (bin_value (e_bin Cat A B i)).
+    Hypothesis comm : HCommutative (fun _ _ => eq) (bin_value (e_bin Cat i)).
 
-    Lemma sum'_sum : forall  (l: mset (T Cat A B)),  eval (sum' i l) = eval (sum i l) .
+    Lemma sum'_sum {A B} {Heq : eq' A B} (l: mset (T Cat A B)) : eval (sum' i l) = eval (sum i l) .
     Proof.
-      intros [[a n] | [a n] l]; destruct n;  simpl; reflexivity.
+      destruct l as [[a n] | [a n] l]; destruct n;  simpl;try rewrite cast_eq. all:try congruence. cbn. 
     Qed.
 
-    Lemma eval_sum_nil (x:T Cat A B):
+    Lemma eval_sum_nil {A}(x:T Cat A A):
       eval (sum i (nilne (x,xH))) = (eval x).
     Proof. rewrite <- sum'_sum. reflexivity.   Qed.
      
-    Lemma eval_sum_cons : forall n a (l: mset (T Cat A B)),
-      (eval (sum i ((a,n):::l))) = (bin_value (e_bin Cat A B i) (@copy _ (bin_value (e_bin Cat A B i)) n (eval a)) (eval (sum i l))).
+    Lemma eval_sum_cons {A} n a (l: mset (T Cat A A)):
+      (eval (sum i ((a,n):::l))) = (bin_value (e_bin Cat i) _ _ _ (@copy _ (bin_value (e_bin Cat i) _ _ _) n (eval a)) (eval (sum i l))).
     Proof.
-      intros n a [[? ? ]|[b m] l]; simpl; reflexivity.
+      destruct l as [[? ? ]|[b m] l]; simpl; reflexivity.
     Qed.
    
-    Inductive compat_sum_unit : @m idx (mset (T Cat A B)) -> Prop :=
-    | csu_left : forall x,  is_unit x = true->  compat_sum_unit  (left x)
-    | csu_right : forall m, compat_sum_unit (right m).
+    Inductive compat_sum_unit {A B} : idx + (mset (T Cat A B)) -> Prop :=
+    | csu_left : forall x,  is_unit x = true -> compat_sum_unit (inl x)
+    | csu_right : forall m, compat_sum_unit (inr m).
 
-    Lemma compat_sum_unit_return x n : compat_sum_unit  (return_sum i is_unit x n).
+    Lemma compat_sum_unit_return {A B} (x:T Cat A B) n : compat_sum_unit (return_sum i is_unit x n).
     Proof.
       unfold return_sum.
-      case is_sum_spec; intros; try constructor; auto.
+      destruct (is_sum_spec x);intros; try constructor; auto.
     Qed.
    
-    Lemma compat_sum_unit_add : forall x n h,
-        compat_sum_unit  h ->
+    Lemma compat_sum_unit_add {A B} x n (h : idx + mset (T Cat A B)):
+        compat_sum_unit h ->
         compat_sum_unit
-          (add_to_sum i (is_unit_of Cat A B i) x n
+          (add_to_sum i (is_unit_of Cat i) x n
                       h).
     Proof.
-      unfold add_to_sum;intros; inversion H;
-        case_eq  (is_sum i (is_unit_of Cat A B i) x);
-        intros; simpl; try constructor || eauto. apply H0.
+      unfold add_to_sum;intros; inversion H.
+      -revert h H H1. refine (match is_sum i (is_unit_of Cat i) x with Is_op _ => _ | _ => _ end).
+       all:intros; simpl; try constructor || eauto. apply H0.
+      -revert h H H0. refine (match is_sum i (is_unit_of Cat i) x with Is_op _ => _ | _ => _ end).
+       all:intros; simpl; try constructor || eauto.
     Qed.
 
     (* Hint Resolve copy_plus. : this lags because of  the inference of the implicit arguments *)
     Hint Extern 5 (copy (?n + ?m) (eval ?a) = bin_value (copy ?n (eval ?a)) (copy ?m (eval ?a))) => apply copy_plus.
     Hint Extern 5 (?x = ?x) => reflexivity.
-    Hint Extern 5 (bin_value ?x ?y = bin_value ?y ?x) => apply bin_comm.
+    Hint Extern 5 (bin_value _ _ _ _ ?x ?y = bin_value _ _ _ _ ?y ?x) => eapply bin_comm.
    
-    Lemma eval_merge_bin : forall (h k: mset (T Cat A B)),
-      eval (sum i (merge_msets compare h k)) = bin_value (e_bin Cat A B i) (eval (sum i h)) (eval (sum i k)).
+    Lemma eval_merge_bin {A} (h k: mset (T Cat A A)):
+      eval (sum i (merge_msets compare h k)) = bin_value (e_bin Cat i) _ _ _ (eval (sum i h)) (eval (sum i k)).
     Proof.
-      induction h as [[a n]|[a n] h IHh]; intro k.
-      -simpl.
-       induction k as [[b m]|[b m] k IHk]; simpl.
-       +destruct (tcompare_weak_spec a b) as [a|a b|a b]; simpl; auto. apply copy_plus; auto.  all: exact _. 
-     
-       +destruct (tcompare_weak_spec a b) as [a|a b|a b]; simpl; auto.
-        rewrite copy_plus,law_assoc; auto. now cbv;congruence. 
-        rewrite IHk;  clear IHk. rewrite 2 law_assoc. f_equal. apply law_comm.
-        
+      revert k. induction h as [[a n]|[a n] h IHh]; intro k.
+      -cbn.
+       induction k as [[b m]|[b m] k IHk]; cbn.
+       +destruct (tcompare_weak_spec a b) as [a|a b|a b]; simpl; eauto. apply copy_plus; auto.
+        *apply HAssociative_Associative with (R:= fun _ _ => eq). apply Binvalue_Associative.
+        *repeat intro. congruence.
+       +destruct (tcompare_weak_spec a b) as [a|a b|a b]; simpl; eauto.
+        *rewrite @copy_plus with (R:=eq), lawH_assoc;eauto.
+         --eapply HAssociative_Associative with (R:=fun _ _ => eq). apply Binvalue_Associative.
+         --repeat intro. congruence.
+        * rewrite IHk;  clear IHk. rewrite 2 lawH_assoc. f_equal. now apply @lawH_comm with (R:= fun _ _ => eq). 
       -induction k as [[b m]|[b m] k IHk]; simpl;  simpl in IHh.
       +destruct (tcompare_weak_spec a b) as [a|a b|a b]; simpl.
-       *rewrite  (law_comm _ (copy m (eval a))), law_assoc, <- copy_plus,  Pplus_comm; auto. now cbv;congruence. 
-       *rewrite <- law_assoc, IHh.  reflexivity.
-       *rewrite law_comm. reflexivity.
-      +simpl in IHk.
+       *rewrite  <- (lawH_comm (R:= fun _ _ => eq) _ (copy m (eval a))), lawH_assoc. 
+        specialize @copy_plus with (R:=eq) (plus := bin_value (e_bin Cat i) A A A) as H. rewrite <- H;eauto. 
+        --rewrite Pplus_comm; auto.
+        --eapply HAssociative_Associative with (R := fun _ _ => eq), Binvalue_Associative.
+        --repeat intro. congruence. 
+       *rewrite <- lawH_assoc, IHh.  reflexivity.
+       *rewrite lawH_comm. reflexivity.
+      +cbn in IHk.
        destruct (tcompare_weak_spec a b) as [a|a b|a b]; simpl.
-       *rewrite IHh; clear IHh. rewrite 2 law_assoc. rewrite (law_comm _ (copy m (eval a))). rewrite law_assoc, <- copy_plus,  Pplus_comm; auto. cbv;congruence. 
-       *rewrite IHh; clear IHh. simpl.  rewrite law_assoc. reflexivity. 
-       *rewrite 2 (law_comm  (copy m (eval b))). rewrite law_assoc.  
-       rewrite <- IHk. reflexivity.
+       *rewrite IHh; clear IHh. rewrite 2 lawH_assoc. rewrite (lawH_comm (R:=fun _ _ => eq) _ _ (copy m (eval a))).
+        rewrite lawH_assoc. specialize @copy_plus with (R:=eq) (plus := bin_value (e_bin Cat i) A A A) as H. rewrite <- H;eauto. 
+        --rewrite  Pplus_comm; auto.
+        --eapply HAssociative_Associative with (R := fun _ _ => eq), Binvalue_Associative.
+        --repeat intro. congruence. 
+       *rewrite IHh; clear IHh. simpl.  rewrite lawH_assoc. reflexivity. 
+       *rewrite IHk. clear IHk. rewrite 1 (lawH_comm (R:= fun _ _ => eq) _ (copy m (eval b))). rewrite <- lawH_assoc.
+        rewrite <- (lawH_comm (R:= fun _ _ => eq) _ (copy m (eval b))). reflexivity. 
     Qed.
 
  
-    Lemma copy_mset' n (l: mset (T Cat A B)):  copy_mset n l = nelist_map (fun vm => let '(v,m):=vm in (v,Pmult n m)) l.
+    Lemma copy_mset' n {A B} (l: mset (T Cat A B)):  copy_mset n l = nelist_map (fun vm => let '(v,m):=vm in (v,Pmult n m)) l.
     Proof.
       unfold copy_mset.  destruct n; try reflexivity.
      
@@ -567,59 +589,62 @@ Module ReifH.
     Qed.
    
    
-    Lemma copy_mset_succ  n (l: mset (T Cat A B)):  eval (sum i (copy_mset (Pos.succ n) l)) = bin_value (e_bin Cat A B i) (eval (sum i l)) (eval (sum i (copy_mset n l))).
+    Lemma copy_mset_succ {A} n (l: mset (T Cat A A)):  eval (sum i (copy_mset (Pos.succ n) l)) = bin_value (e_bin Cat i) _ _ _ (eval (sum i l)) (eval (sum i (copy_mset n l))).
     Proof.
       rewrite 2 copy_mset'.
      
       induction l as [[a m]|[a m] l IHl].
-      -simpl eval.   rewrite <- copy_plus; auto. rewrite Pmult_Sn_m. reflexivity. cbv. congruence. 
+      -cbn. rewrite Pmult_Sn_m. rewrite copy_plus. reflexivity. now eapply HAssociative_Associative with (R := fun _ _ => eq), Binvalue_Associative. now repeat intro;congruence. 
       -simpl nelist_map.  rewrite ! eval_sum_cons. rewrite IHl.  clear IHl.
-       rewrite Pmult_Sn_m. rewrite copy_plus; auto. rewrite <- !law_assoc. 2:now cbv;congruence.
-       f_equal. 
-       rewrite law_comm . rewrite <- !law_assoc. f_equal. apply law_comm.
+       rewrite Pmult_Sn_m. rewrite copy_plus; auto. rewrite <- !lawH_assoc. f_equal.  
+       rewrite lawH_comm . rewrite <- !lawH_assoc. f_equal. eapply @lawH_comm with (R:=fun _ _ => eq). eauto. now eapply HAssociative_Associative with (R := fun _ _ => eq), Binvalue_Associative. repeat intro;congruence. 
     Qed.
 
-    Lemma copy_mset_copy : forall n  (m : mset (T Cat A B)), eval (sum i (copy_mset n m)) = @copy _ (bin_value (e_bin Cat A B i)) n (eval (sum i m)).
+    Lemma copy_mset_copy {A}: forall n  (m : mset (T Cat A A)), eval (sum i (copy_mset n m)) = @copy _ (bin_value (e_bin Cat i) _ _ _) n (eval (sum i m)).
     Proof.
       induction n using Pind; intros.
-     
-      unfold copy_mset. rewrite copy_xH. reflexivity.
-      rewrite copy_mset_succ. rewrite copy_Psucc. rewrite IHn. reflexivity.
+      -unfold copy_mset. rewrite copy_xH. reflexivity.
+      -rewrite copy_mset_succ. rewrite copy_Psucc. rewrite IHn. reflexivity.
     Qed.
    
-    Instance compat_sum_unit_Unit : forall p, compat_sum_unit (left p) ->
-      @Unit _ eq (bin_value (e_bin Cat A B i)) (eval (unit Cat A B p)).
+    Instance compat_sum_unit_Unit {A}: forall p, compat_sum_unit (A:=A) (B:=A) (inl p) ->
+      @HUnit _ _ (fun _ _ => eq) (bin_value (e_bin Cat i)) (fun A => eval (unit p)).
     Proof.
       intros.
       inversion H. subst.  auto.
     Qed.
   
-    Lemma copy_n_unit : forall j n, is_unit j = true ->
-      eval (unit Cat A B j) = @copy _ (bin_value (e_bin Cat A B i)) n (eval (unit Cat A B j)).
+    Lemma copy_n_unit {A}: forall j n, is_unit j = true ->
+      eval (unit j) = @copy _ (bin_value (e_bin Cat i) A _ _) n (eval (unit j)).
     Proof.
       intros.
       induction n using Prect.
       rewrite copy_xH. reflexivity.
-      rewrite copy_Psucc. rewrite <- IHn. apply is_unit_sum_Unit in H. rewrite law_neutral_left. reflexivity.
+      rewrite copy_Psucc. rewrite <- IHn. apply is_unit_sum_Unit in H. symmetry. eapply @lawH_neutral_left with (R:= fun _ _ => eq) (A:=A) (B:=A). eauto.
     Qed.
 
    
-    Lemma z0  l r (H : compat_sum_unit  r):
-      eval (sum i (run_msets (comp (merge_msets compare) l r))) = eval (sum i ((merge_msets compare) (l) (run_msets r))).
+    Lemma z0 {A} l r (H : compat_sum_unit r):
+      eval (sum i (run_msets (comp (merge_msets compare) l r))) = eval (B:=A) (sum i ((merge_msets compare) (l) (run_msets r))).
     Proof.
       unfold comp. unfold run_msets.
       case_eq r; intros; subst.
       rewrite eval_merge_bin; auto.
       rewrite eval_sum_nil.
-      apply compat_sum_unit_Unit in H. rewrite law_neutral_right.  reflexivity.
-      reflexivity.
+      apply compat_sum_unit_Unit in H. symmetry. apply @lawH_neutral_right with (1:=H). reflexivity.
     Qed.
 
-    Lemma z1 : forall n x,
-      eval (sum i (run_msets (return_sum i (is_unit) x n )))
-      = @copy _ (bin_value (e_bin Cat A B i)) n (eval x).
+    Lemma z1 {A}: forall n x,
+      eval (B:=A)(sum i (run_msets (return_sum i (is_unit) x n )))
+      = @copy _ (bin_value (e_bin Cat i) _ _ _) n (eval x).
     Proof.
-      intros. unfold return_sum.  unfold run_msets.
+      intros. unfold return_sum. remember A as B eqn:H in |-. Set Printing Implicit. All. 
+      replace (is_sum i is_unit x) unfold run_msets.
+      assert (H:=is_sum_spec x). remember (is_sum i is_unit x). remember A as B in at 1 2. Set Printing All. 
+      refine (match H with is_sum_spec_op _ _ => _ | _ => _ end). inversion. 
+      Require Import EquationS.Equations. 
+
+      dependent inversion H. Set Printingdestruct H. 
       destruct (is_sum_spec x); intros; subst.
       -rewrite copy_mset_copy.
        reflexivity.

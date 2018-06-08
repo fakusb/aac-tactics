@@ -13,7 +13,7 @@ Class Unit {X:Type} (R:relation X) (op : X -> X -> X) (unit:X) := {
 
 (** * Classes for properties of homogeneous operators*)
 Class HAssociative {Obj: Type} {Arr:Obj -> Obj -> Type} (R:forall A B, relation (Arr A B)) (comp: forall A B C, Arr B C -> Arr A B -> Arr A C) :=
-  lawH_assoc : forall A B C D (x: Arr C D) (y: Arr B C) (z: Arr A B), (comp _ _ _ x (comp _ _ _ y z)) =(comp _ _ _ (comp _ _ _ x y) z).
+  lawH_assoc : forall A B C D (x: Arr C D) (y: Arr B C) (z: Arr A B), R _ _ (comp _ _ _ x (comp _ _ _ y z)) (comp _ _ _ (comp _ _ _ x y) z).
 Class HCommutative {Obj: Type} {Arr:Obj -> Obj -> Type} (R:forall A B, relation (Arr A B)) (comp: forall A B C, Arr B C -> Arr A B -> Arr A C) :=
   lawH_comm: forall A (x y: Arr A A), R _ _ (comp _ _ _ x y) (comp _ _ _ y x).
 Class HUnit {Obj:Type} {Arr:Obj -> Obj -> Type} (R:forall A B, relation (Arr A B)) (comp: forall A B C, Arr B C -> Arr A B -> Arr A C) (unit:forall A, Arr A A) := {
